@@ -8,7 +8,7 @@ static uint8_t expr_for(pet_mood_t m)
     case MOOD_HUNGRY: return EXPR_HUNGRY;
     case MOOD_TIRED:
     case MOOD_SAD:    return EXPR_SAD;
-    case MOOD_CURIOUS: return EXPR_SURPRISE;
+    case MOOD_CURIOUS: return EXPR_NEUTRAL; /* la sorpresa es de la sacudida; aqui solo atencion */
     case MOOD_HAPPY:  return EXPR_HAPPY;
     default:          return EXPR_NEUTRAL;
     }
