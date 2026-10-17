@@ -38,7 +38,7 @@ Base **Sweetie-16** (GrafxKid, vía Lospec; las paletas de color no tienen copyr
 (Son 16 colores del original + el negro de fondo; la indexación de implementación se fija en la fase 0.)
 
 **Reglas AMOLED:**
-- **Nunca contorno negro**: sobre fondo negro desaparece. El contorno es un tono oscuro *coloreado* de la rampa de la criatura (contraste ≥ 3:1 contra negro, comprobado automáticamente).
+- **Nunca contorno negro**: sobre fondo negro desaparece. El contorno es un tono oscuro *coloreado* de la rampa de la criatura (comprobado automáticamente: sombra y base ≥ 3:1 contra negro; el contorno oscuro de Sweetie solo llega a ~1,9:1 (coral, cielo, niebla), así que se exige ≥ 1,8:1 y la silueta la sostienen sombra y base — hallazgo de la fase 0).
 - Fondos negros predominantes. Nada estático durante mucho tiempo (ver 8).
 - El color de la rama **no** cambia el tono: el tono lo da la semilla. La rama cambia forma y partes.
 
@@ -146,7 +146,7 @@ Cuantizadas a ~80 ms (12,5 pasos/s) para conservar el aire pixel art:
 
 ### Revisión automática (antes de mirar la hoja)
 - Sin píxeles huérfanos (salvo brillos marcados), contorno continuo de 1 px.
-- Contraste del contorno y del cuerpo ≥ 3:1 contra negro.
+- Contraste contra negro: contorno ≥ 1,8:1, sombra y base ≥ 3:1.
 - ≤ 16 colores por criatura; negro solo como fondo.
 - Anclas de cara dentro del cuerpo; la máscara completa cabe en su tamaño de etapa.
 - Distinción mínima entre expresiones.
@@ -167,3 +167,6 @@ Cuantizadas a ~80 ms (12,5 pasos/s) para conservar el aire pixel art:
 | C2 | Los dos adultos y sus variantes |
 | C3 | Animaciones básicas en tira |
 | C4 | Hoja completa de referencia: **primer entregable de arte** = guía + criatura en sus 4 etapas, ≥ 2 ramas adultas y animaciones básicas |
+
+## 10. Cómo regenerar las hojas (fase 0)
+`cd tools/sim && make check` (comprobaciones automáticas) y `make sheets` (escribe `sheets/c0_board.png`, `sheets/c0_faces.png` y `sheets/c0_legend.txt`, no versionados). El código de dibujo es `components/pet_render` (C99, mismo fuente para PC y firmware).

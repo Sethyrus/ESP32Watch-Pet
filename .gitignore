@@ -30,3 +30,6 @@ eim_config.toml
 
 # Local editor config (ESP-IDF extension writes absolute paths here)
 .vscode/
+
+# Hojas de contacto generadas (tools/sim)
+sheets/

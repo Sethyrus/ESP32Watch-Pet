@@ -1,0 +1,174 @@
+#include "pet_masks.h"
+#include <stddef.h>
+
+/* ---- Huevo: 20x24 ---- */
+static const char *const EGG0[24] = {
+    "..........", "......BBBB", "....BBBBBB", "...BBBBBBB", "..BBBBBBBB", "..BBBBBBBB",
+    ".BBBBBBBBB", ".BBBBBBBBB", ".BBBBBBBBB", ".BBBBBBBBB", ".BBBBBBBBB", ".BBBBBBBBB",
+    ".BBBBBBBBB", ".BBBBBBBBB", ".BBBBBBBBB", ".BBBBBBBBB", ".BBBBBBBBB", ".BBBBBBBBB",
+    ".BBBBBBBBB", "..BBBBBBBB", "..BBBBBBBB", "...BBBBBBB", "....BBBBBB", "..........",
+};
+static const char *const EGG1[24] = {
+    "..........", "..........", ".....BBBBB", "...BBBBBBB", "..BBBBBBBB", ".BBBBBBBBB",
+    ".BBBBBBBBB", ".BBBBBBBBB", ".BBBBBBBBB", ".BBBBBBBBB", ".BBBBBBBBB", ".BBBBBBBBB",
+    ".BBBBBBBBB", ".BBBBBBBBB", ".BBBBBBBBB", ".BBBBBBBBB", ".BBBBBBBBB", ".BBBBBBBBB",
+    ".BBBBBBBBB", "..BBBBBBBB", "...BBBBBBB", ".....BBBBB", "..........", "..........",
+};
+static const char *const EGG2[24] = {
+    "..........", ".......BBB", ".....BBBBB", "....BBBBBB", "...BBBBBBB", "...BBBBBBB",
+    "..BBBBBBBB", "..BBBBBBBB", "..BBBBBBBB", "..BBBBBBBB", "..BBBBBBBB", "..BBBBBBBB",
+    "..BBBBBBBB", "..BBBBBBBB", "..BBBBBBBB", "..BBBBBBBB", "..BBBBBBBB", "..BBBBBBBB",
+    "..BBBBBBBB", "...BBBBBBB", "...BBBBBBB", "....BBBBBB", ".....BBBBB", "..........",
+};
+static const pet_mask_t EGGS[] = {
+    {"huevo clasico", 10, 24, EGG0}, {"huevo redondo", 10, 24, EGG1}, {"huevo alto", 10, 24, EGG2},
+};
+
+/* ---- Cria: 24x24 ---- */
+static const char *const BABY0[24] = {
+    "............", "............", "............", "............", "...........G",
+    ".....F.BBBBB", ".....BBBBBBB", "....BBBBBBBB", "...BBBBBBBBB", "..BBBBBBBBBB",
+    "..BBBBBBBBBB", ".BBBBBEBBBBB", ".BBBBBBBBBBB", ".BBBBBBBBBBB", ".BBBBBBBBBBB",
+    ".BBBBBBBBBBB", ".BBBBBBBBBBM", ".BBBBBBBBBBB", "..BBBBBBBBBB", "..BBBBBBBBBB",
+    "...BBBBBBBBB", "....BBBBBBBB", "............", "............",
+};
+static const pet_mask_t BABIES[] = { {"cria blob", 12, 24, BABY0} };
+
+
+
+/* ---- Juvenil: 32x32 (linaje blob) ---- */
+static const char *const JUV0[32] = {
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "...............G",
+    "...........BBBBB",
+    "........FBBBBBBB",
+    "........BBBBBBBB",
+    ".......BBBBBBBBB",
+    "......BBBBBBBBBB",
+    ".....BBBBBBBBBBB",
+    ".....BBBBBBBBBBB",
+    ".....BBBBBBBBBBB",
+    ".....BBBEBBBBBBB",
+    "....BBBBBBBBBBBB",
+    "....BBBBBBBBBBBB",
+    "....BBBBBBBBBBBB",
+    "...BBBBBBBBBBBBB",
+    "...BBBBBBBBBBBBM",
+    ".BBBBBBBBBBBBBBB",
+    ".BBBBBBBBBBBBBBB",
+    "...BBBBBBBBBBBBB",
+    "...BBBBBBBBBBBBB",
+    "...BBBBBBBBBBBBB",
+    "...BBBBBBBBBBBBB",
+    "....BBBBBBBBBBBB",
+    ".....BBBBBBBBBBB",
+    ".......BBBBBBBBB",
+    "....BBBBB.......",
+    "....BBBBB.......",
+    "................",
+};
+static const pet_mask_t JUVS[] = { {"juvenil pera", 16, 32, JUV0} };
+
+/* ---- Adulto: 40x40. Rama A "Hogareno" (bajo, ancho), rama B "Explorador" (alto, alas). ---- */
+static const char *const ADU0[40] = {
+    "....................",
+    "....................",
+    "....................",
+    "....................",
+    "....................",
+    "....................",
+    "....................",
+    "....................",
+    "....................",
+    "....................",
+    "...................G",
+    ".............BBBBBBB",
+    "........F.BBBBBBBBBB",
+    "........BBBBBBBBBBBB",
+    "......BBBBBBBBBBBBBB",
+    ".....BBBBBBBBBBBBBBB",
+    "....BBBBBBBBBBBBBBBB",
+    "....BBBBBBBBBBBBBBBB",
+    "....BBBBBBBBBBBBBBBB",
+    "....BBBBBBBEBBBBBBBB",
+    "....BBBBBBBBBBBBBBBB",
+    "....BBBBBBBBBBBBBBBB",
+    "....BBBBBBBBBBBBBBBB",
+    "....BBBBBBBBBBBBBBBB",
+    "....BBBBBBBBBBBBBBBB",
+    "...BBBBBBBBBBBBBBBBB",
+    "...BBBBBBBBBBBBBBBBM",
+    "....BBBBBBBBBBBBBBBB",
+    "....BBBBBBBBBBBBBBBB",
+    "....BBBBBBBBBBBBBBBB",
+    "....BBBBBBBBBBBBBBBB",
+    "....BBBBBBBBBBBBBBBB",
+    "....BBBBBBBBBBBBBBBB",
+    "....BBBBBBBBBBBBBBBB",
+    ".....BBBBBBBBBBBBBBB",
+    ".......BBBBBBBBBBBBB",
+    ".....BBBBBB.........",
+    ".....BBBBBB.........",
+    "....................",
+    "....................",
+};
+static const char *const ADU1[40] = {
+    "....................",
+    "....................",
+    "....................",
+    "....................",
+    "...................G",
+    "...............BBBBB",
+    "............FBBBBBBB",
+    "...........BBBBBBBBB",
+    "..........BBBBBBBBBB",
+    ".........BBBBBBBBBBB",
+    "........BBBBBBBBBBBB",
+    "........BBBEBBBBBBBB",
+    "........BBBBBBBBBBBB",
+    "........BBBBBBBBBBBB",
+    "........BBBBBBBBBBBB",
+    ".......BBBBBBBBBBBBB",
+    ".....BBBBBBBBBBBBBBB",
+    "....BBBBBBBBBBBBBBBB",
+    "...BBBBBBBBBBBBBBBBM",
+    "...BBBBBBBBBBBBBBBBB",
+    "....BBBBBBBBBBBBBBBB",
+    ".....BBBBBBBBBBBBBBB",
+    "......BBBBBBBBBBBBBB",
+    ".......BBBBBBBBBBBBB",
+    ".......BBBBBBBBBBBBB",
+    ".......BBBBBBBBBBBBB",
+    ".......BBBBBBBBBBBBB",
+    ".......BBBBBBBBBBBBB",
+    ".......BBBBBBBBBBBBB",
+    ".......BBBBBBBBBBBBB",
+    ".......BBBBBBBBBBBBB",
+    ".......BBBBBBBBBBBBB",
+    ".......BBBBBBBBBBBBB",
+    ".......BBBBBBBBBBBBB",
+    "........BBBBBBBBBBBB",
+    ".........BBBBBBBBBBB",
+    ".......BBBBB........",
+    ".......BBBBB........",
+    "....................",
+    "....................",
+};
+static const pet_mask_t ADULTS[] = { {"adulto hogareno", 20, 40, ADU0}, {"adulto explorador", 20, 40, ADU1} };
+
+const pet_mask_t *const PET_MASKS[4] = { EGGS, BABIES, JUVS, ADULTS };
+const int PET_MASK_COUNT[4] = { 3, 1, 1, 2 };
+
+/* ---- Piezas ---- */
+static const char *const EAR0[] = {"B..", "BB.", "BB.", "BBB"};
+static const char *const EAR1[] = {".B.", "BBB", "BBB"};
+static const char *const EAR2[] = {"aa", "aa", ".B", ".B"};
+const pet_piece_t PET_EARS[3] = { {3, 4, EAR0}, {3, 3, EAR1}, {2, 4, EAR2} };
+static const char *const LEAR0[] = {"B...", "BB..", "BB..", "BBB.", "BBBB"};
+static const char *const LEAR1[] = {".BB.", "BBBB", "BBBB", "BBBB"};
+static const char *const LEAR2[] = {"aaa", "aaa", "aaa", "..B", "..B"};
+const pet_piece_t PET_EARS_L[3] = { {4, 5, LEAR0}, {4, 4, LEAR1}, {3, 5, LEAR2} };
