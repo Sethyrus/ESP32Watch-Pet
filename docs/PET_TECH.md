@@ -19,7 +19,11 @@ ESP32Watch-Pet/
 
 `pet_core` y `pet_render` no incluyen cabeceras de ESP-IDF, LVGL ni SDL: reciben el tiempo, el azar y las entradas como parámetros, de modo que **el mismo código compila para el simulador, los tests y el firmware** (patrón de pocket-tank y de `ESP32Watch-Fluid/components/fluid_engine` + `tools/host_bench`).
 
-### API de `pet_core` (boceto, se concreta en F1)
+### API de `pet_core` (real: `components/pet_core/include/pet_core.h`)
+
+Resumen; la cabecera es la referencia. Tiempo en segundos de hora local; los eventos con subsegundos reciben además un reloj monotónico en ms. `pet_view()` rellena el `pet_view_t` de `pet_render` y devuelve la animación recomendada (`pet_core/pet_view.c` es el único punto que incluye `pet_render.h`). `pet_step` trata un hueco > 5 min como ausencia (`pet_catch_up`); la app **solo** llama a `pet_step` con la pantalla encendida y a `pet_ingest_scan` en segundo plano. Partida v2, 563 B (estado en RAM 1,1 KB): `pet_save`/`pet_load`/`pet_load_ab` (A/B con CRC y migración v1→v2 probada).
+
+Boceto original:
 
 ```c
 void   pet_init(pet_state_t *s, uint64_t seed, int64_t now_s);

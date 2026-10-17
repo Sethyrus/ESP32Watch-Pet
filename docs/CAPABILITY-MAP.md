@@ -23,11 +23,13 @@ Estado: **lista para arrancar.** Módulos, orden de construcción y puertas de s
 
 Resultado: `components/pet_render` (huevo, cría blob, juvenil pera, adultos Hogareño y Explorador, variantes pulida/torpe/rara, 8 expresiones, animaciones idle/botar/comer/dormir), `tools/sim` (`make check`, `make sheets`) y las hojas de referencia en `docs/art/approved/`. Pendiente para más adelante: iconos de comida, huevo agrietado al eclosionar, ventana SDL2 interactiva.
 
-### Fase 1: motor en PC
+### Fase 1: motor en PC — **hecha** (A1–A10 en verde)
 1. `pet_core`: estado, despensa, familiaridad por BSSID, comida, ánimo, decisiones, evolución, errores de cuidado.
 2. Tiempo ausente (`pet_catch_up`), noche, serialización A/B con migración.
 3. Tests de semanas con distintas dietas.
 - **Salida:** criterios A1–A10 de `PET_DESIGN.md` en verde; valores calibrados (P8).
+
+Resultado: `components/pet_core` (~16 KB de código, 0 B de RAM estática, compilado para xtensa sin avisos), `tests/` (`make -C tests test` y `make -C tests asan`; 9.728 comprobaciones) y la calibración de `PET_DESIGN.md`, sección 14. Decisiones R5–R9 en `DECISIONS.md`.
 
 Las fases 0 y 1 pueden solaparse una vez fijado `pet_view_t` (qué necesita el render del estado).
 

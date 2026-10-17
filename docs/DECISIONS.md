@@ -46,6 +46,11 @@ Registro de decisiones del proyecto. Criterio general (usuario, 2026-10-17): **p
 | R1 | Navegación: toque = caricia; deslizar arriba = despensa; abajo = estado; BOOT = aceptar; PWR corto = atrás (en la raíz: Launcher en modo app, nada en standalone). |
 | R2 | Noche por defecto 23:00–08:00, ajustable. |
 | R3 | Audio mínimo (señal nueva, caricia, hambre) con ondas generadas en C, silenciable y mudo de noche; es lo último de F2 y se recorta si complica el consumo. |
+| R5 | Edad contada desde la instalación (no desde la eclosión); plazos máximos a los 7 días (juvenil) y 14 (adulto). Con una visita al día la eclosión tarda y el plazo de 14 días se iba a 16. |
+| R6 | Doméstico da +1 PC. Sin él, quien se queda en casa no crecía (solo +10/día de visita) y esperaba al plazo. |
+| R7 | El picoteo y la ausencia comen el bocado **más antiguo** y cuentan para la dieta: la dieta depende del entorno y el jugador la sesga. Alternativa descartada: comer siempre doméstico (todo jugador con salidas quedaría Hogareño aunque viva fuera). |
+| R8 | Las puntuaciones de familiaridad se actualizan por **épocas de ≥ 20 min**; así el modo mesa no promueve un AP a familiar en 5 min. |
+| R9 | Descenso pasivo de estadísticas lineal; la amortiguación solo en ganancias y pérdidas por evento. |
 | R4 | Valores numéricos de `PET_DESIGN.md` como punto de partida; se calibran con los tests A1–A10 en F1. |
 
 ## Abiertas

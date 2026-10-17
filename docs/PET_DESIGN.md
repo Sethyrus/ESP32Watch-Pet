@@ -50,7 +50,7 @@ Tres capas, definidas por **magnitud de cambio** y no por temporizadores separad
 | Lenta | **Fracción manual** | Bocados dados por el jugador / total comidos, en la etapa. |
 | Personalidad | **Rasgos** (curiosidad, calma, glotonería, 0–9) | Sembrados al nacer; sesgan decisiones y la apariencia. |
 
-**Amortiguación** (Catode32): toda ganancia se multiplica por `((100−v)/100)^0,7` y toda pérdida por `(v/100)^0,7`; por debajo de 25, las ganancias valen hasta ×3, para que recuperarse sea fácil.
+**Amortiguación** (Catode32): toda ganancia se multiplica por `((100−v)/100)^0,7` y toda pérdida **por evento** (p. ej. sacudidas) por `(v/100)^0,7`; por debajo de 25, las ganancias valen hasta ×3, para que recuperarse sea fácil. El descenso **pasivo** (8/h, 5/h, 2/h) es lineal: amortiguarlo hacía que la saciedad casi nunca llegara a ≤ 5 y los errores de cuidado fueran inalcanzables.
 
 ## 5. Despensa y bocados
 
@@ -65,7 +65,9 @@ Cada escaneo no alimenta directamente: **llena la despensa**.
 
 **Familiaridad por BSSID** (Catode32): tabla de 32 familiares + 32 recientes, indexada por hash con sal del dispositivo (nunca BSSID ni SSID en claro). Por cada escaneo: +1 si visto, −0,25 si no, se elimina a ≤ 0, pasa a familiar con ≥ 5. Un AP es **nuevo** si no está en ninguna tabla.
 
-**Bocados por escaneo** (*inicial*): domésticos `min(2, familiares visibles)`; exóticos `min(3, nuevos)`; urbano 0 o 1. **Tope diario de novedad:** 12 exóticos por día (evita el "farmeo" paseando junto a un bloque de pisos).
+**Época de familiaridad:** las puntuaciones solo se actualizan si han pasado ≥ 20 min desde la última época (así el modo mesa, con escaneos cada minuto, no convierte un AP en familiar en 5 minutos). Los domésticos solo se generan en una época; los exóticos en cualquier escaneo, porque un AP solo es «nuevo» la primera vez que entra en la tabla.
+
+**Bocados por escaneo** (*inicial*): domésticos `min(2, familiares visibles)` (solo en época); exóticos `min(3, nuevos)`; urbano 0 o 1. **Tope diario de novedad:** 12 exóticos por día (evita el "farmeo" paseando junto a un bloque de pisos).
 
 Si la despensa está llena se descarta primero el bocado más antiguo de tipo doméstico.
 
@@ -73,11 +75,11 @@ Si la despensa está llena se descarta primero el bocado más antiguo de tipo do
 
 | Bocado | Saciedad | Ánimo | PC |
 | --- | --- | --- | --- |
-| Doméstico | +12 | +1 | 0 |
+| Doméstico | +12 | +1 | +1 |
 | Exótico | +8 | +8 | +4 |
 | Urbano | +10 | +4 | +3 |
 
-**Picoteo autónomo:** si la saciedad < 30 y el jugador no actúa en 5 min, la mascota come el bocado más antiguo con **60 % de aprovechamiento** (saciedad, ánimo y PC × 0,6) y sin contar como bocado manual.
+**Picoteo autónomo:** si la saciedad < 30 y el jugador no actúa en 5 min, la mascota come el bocado más antiguo (de cualquier tipo, una vez cada 5 min) con **60 % de aprovechamiento** (saciedad, ánimo y PC × 0,6) y sin contar como bocado manual. Lo que come solo **cuenta para la dieta**: la dieta depende del entorno (qué bocados llegan) y el jugador la sesga eligiendo qué dar. «Picotear» no es un comportamiento del motor de decisión sino esta regla, que avisa a la UI con un evento.
 
 ## 6. Ánimo, expresión y reacciones
 
@@ -104,17 +106,18 @@ Si la despensa está llena se descarta primero el bocado más antiguo de tipo do
 | --- | --- |
 | Huevo | al instalar; eclosiona tras 10 min de uso activo |
 | Cría | tras eclosionar |
-| Juvenil | edad ≥ 36 h **y** PC ≥ 40 |
-| Adulto | edad ≥ 6 días **y** PC ≥ 200 (desde juvenil) |
+| Juvenil | edad ≥ 36 h **y** PC ≥ 40 (edad contada **desde la instalación**) |
+| Adulto | edad ≥ 6 días **y** PC ≥ 200 (PC totales de la vida, no se reinician) |
 
-**Plazo máximo:** a los 14 días de edad evoluciona igualmente, para que nada se quede atascado.
+**Plazo máximo** (para que nada se quede atascado), también desde la instalación: a los **7 días** pasa a juvenil y a los **14 días** a adulto aunque falten PC.
 
 ### Puntos de crecimiento
-- Comida: +PC según la tabla de 5, con **tope de 50 PC/día** por comida.
+- Comida: +PC según la tabla de 5 (doméstico +1, exótico +4, urbano +3), con **tope de 50 PC/día** por comida.
 - **Visita diaria:** +10 PC por cada día con al menos una interacción o bocado.
 - Máximo ≈ 60 PC/día: un jugador activo llega a adulto en ~6–7 días; uno casual, en ~10; quien solo hace una visita al día en casa, en ~14 (por el plazo máximo).
 
 ### Rama del adulto (MVP: dos adultos)
+- **Eje de dieta:** los urbanos cuentan como exóticos; se cuenta durante cría y juvenil y deja de contar al ser adulto.
 - **Adulto A «Hogareño»:** eje de dieta < 0,30.
 - **Adulto B «Explorador»:** eje de dieta ≥ 0,30.
 - La **calidad de cuidado** no cambia la rama, cambia la **variante** (mismo cuerpo, parámetros distintos):
@@ -196,3 +199,23 @@ Pitidos y melodías cortas de onda cuadrada o triangular generadas en C (sin WAV
 | A8 | Cargar una partida de la versión N−1 produce una partida válida (migración). Un guardado truncado se rechaza y se usa la copia anterior. |
 | A9 | Ningún BSSID ni SSID en claro aparece en la partida serializada. |
 | A10 | La rama no cambia con las variantes de cuidado: cambia solo la variante. |
+
+### Estado (fase 1, `make -C tests test`): **A1–A10 en verde** (9.728 comprobaciones; también con ASan/UBSan)
+
+A1 se comprueba con tres escenarios sobre 1.000 semillas, porque la dieta es lo que se *come* (también el picoteo): (a) en casa y solo domésticos → Hogareño siempre (eje máximo 0,03, por los exóticos de la primera vez que se ven los AP de casa); (b) con salidas y 70 % exóticos manuales → Explorador siempre (eje mínimo 0,67); (c) con salidas y solo domésticos manuales → la rama sigue al eje exactamente (el picoteo come lo más antiguo, y con salidas casi todo es exótico).
+
+## 14. Calibración (fase 1)
+
+Perfiles simulados (200–300 semillas; casa de 8 AP, trabajo de 10, calle con 14 AP nuevos por escaneo; escaneo cada 15 min de 08 a 23):
+
+| Perfil | Adulto el día | Rama |
+| --- | --- | --- |
+| Activo (3 visitas/día), con salidas | 7 (juvenil el 2) | Explorador |
+| Una visita/día, con salidas | 7 (juvenil el 3) | Explorador |
+| Activo, siempre en casa | 9–10 | Hogareño |
+| Una visita/día, siempre en casa | 11 | Hogareño |
+
+- **La rama sigue al estilo de vida:** con 0 % de días de salida todo Hogareño; con 20 %, ~35 % Explorador; con 40 %, ~80 %; con 60 % o más, casi todo Explorador. El umbral 0,30 deja el punto medio en torno a un día de cada cinco fuera de casa.
+- **Con salidas, la edad manda, no los PC** (se llega a 200 PC antes de los 6 días); en casa mandan los PC. Sin los +1 PC del doméstico, quien se quedaba en casa esperaba 14 días (el plazo máximo).
+- **Variantes:** Pulida para quien sale y juega (ánimo medio ≥ 60); Normal para el término medio; Rara para quien casi no recibe novedad ni caricias (el casual que nunca sale de casa cae siempre en Rara). **Torpe exige un abandono sostenido** (≥ 4 errores en el juvenil: ausencias de varios días repetidas); en uso normal no sale nunca. Es coherente con el tono indulgente.
+- Ausencia de 7 días: saciedad 15, ánimo 35, errores añadidos ≤ 2 (en cualquier etapa).
