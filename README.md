@@ -2,7 +2,18 @@
 
 Mascota virtual tipo Tamagotchi para la Waveshare **ESP32-S3-Touch-AMOLED-2.06** con `ESP-IDF 5.5.4` + `LVGL 9` + BSP oficial de Waveshare.
 
-Diseno y mecanicas en [docs/PET_DESIGN.md](docs/PET_DESIGN.md) (TBD).
+Estado: **solo especificaciones, sin codigo de juego todavia.** La mascota se alimenta de las redes WiFi de su entorno (escaneo pasivo), evoluciona segun su dieta y los cuidados, y nunca muere.
+
+| Documento | Contenido |
+| --- | --- |
+| [docs/PET_DESIGN.md](docs/PET_DESIGN.md) | Producto: mecanicas, estadisticas, evolucion, criterios de aceptacion |
+| [docs/PET_TECH.md](docs/PET_TECH.md) | Arquitectura, render, radio, persistencia, medicion de consumo |
+| [docs/STYLEGUIDE.md](docs/STYLEGUIDE.md) | Guia de estilo del arte generado por codigo |
+| [docs/RESEARCH.md](docs/RESEARCH.md) | Analisis de referencias y de fuentes de assets |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | Decisiones tomadas y pendientes |
+| [docs/CAPABILITY-MAP.md](docs/CAPABILITY-MAP.md) | Modulos y fases |
+
+Se podra instalar como app junto a las demas (slot OTA) o como unico firmware del reloj (standalone); ver `PET_TECH.md`.
 
 ## Compilar y flashear
 
@@ -13,7 +24,7 @@ idf.py build
 idf.py -p <PORT> flash monitor   # p. ej. /dev/tty.usbmodem1101; sin -p lo autodetecta
 ```
 
-Para flashear dentro del launcher, usar `flash_all.sh` de ESP32Watch-Launcher (la app ocupa `ota_4`).
+Para flashear dentro del launcher, usar `flash_all.sh` de ESP32Watch-Launcher (slot previsto: `ota_5`; `ota_4` es el slot de pruebas de core).
 
 ## Documentacion
 

@@ -1,0 +1,44 @@
+# Capability Map: ESP32Watch-Pet
+
+Estado: **borrador para revisión.** Módulos, orden de construcción y puertas de salida de cada fase. Detalle en `PET_DESIGN.md` (producto), `PET_TECH.md` (técnica) y `STYLEGUIDE.md` (arte).
+
+## Módulos
+
+| Módulo | Responsabilidad | Depende de |
+| --- | --- | --- |
+| `pet_core` | Estado, reglas, despensa, decisiones, ánimo, evolución, tiempo ausente, serialización versionada. C99 puro; sin hardware; determinista. | — |
+| `pet_render` | Paleta, máscaras, cara, animación, iconos → búfer indexado. C99 puro. | contrato de datos de `pet_core` (`pet_view_t`) |
+| `tools/sim` | Tests headless, hojas de contacto PNG/tira, ventana SDL2 interactiva, avance rápido del tiempo. | `pet_core`, `pet_render` |
+| `pet_app` (HAL) | Display, táctil, botones, IMU, RTC, batería, NVS, sueño sobre `watch_board`. | `pet_core`, `pet_render` |
+| `pet_app` (radio) | Escaneo WiFi pasivo, hash con sal, planificador. | `pet_core` |
+| `pet_app` (modos) | Modo app y modo standalone (`PET_STANDALONE`), detección mesa/muñeca. | HAL, radio |
+
+## Fases
+
+### Fase 0: arte (mayor riesgo, va primero)
+1. Simulador mínimo + generador de hojas de contacto con la primera criatura de prueba.
+2. **C0:** guía de estilo + moodboard + paleta aprobados.
+3. **C1:** cría y juvenil con la cara completa. **C2:** los dos adultos y variantes. **C3:** animaciones en tira.
+4. **C4 (salida de la fase):** hoja de referencia aprobada con 4 etapas, ≥ 2 adultos y animaciones básicas; hojas aprobadas guardadas.
+
+### Fase 1: motor en PC
+1. `pet_core`: estado, despensa, familiaridad por BSSID, comida, ánimo, decisiones, evolución, errores de cuidado.
+2. Tiempo ausente (`pet_catch_up`), noche, serialización A/B con migración.
+3. Tests de semanas con distintas dietas.
+- **Salida:** criterios A1–A10 de `PET_DESIGN.md` en verde; valores calibrados (P8).
+
+Las fases 0 y 1 pueden solaparse una vez fijado `pet_view_t` (qué necesita el render del estado).
+
+### Fase 2: firmware
+Orden:
+1. **Esqueleto con WiFi**: compilar y medir tamaño y RAM (decide P3).
+2. **Prueba de consumo** E0–E4 (`PET_TECH.md`, sección 8) con firmware de prueba en `ota_4`; fija P4 y valida P5.
+3. Bring-up: render propio en el panel, táctil, botones, RTC.
+4. Radio real → `pet_ingest_scan`; persistencia en NVS.
+5. Detección de modo, sueño, noche, saludo e IMU.
+6. Modo app (Launcher) y modo standalone.
+7. Alta en el Launcher y trabajo entre repos (`PET_TECH.md`, sección 9); `check_apps.sh` sin avisos.
+- **Salida:** MVP jugable en el reloj; medidas de consumo documentadas en core `docs/`.
+
+## Fuera del MVP
+BLE y eje WiFi/BLE, Señalpedia, herencia, minijuegos, voz, social, esfera del Launcher, despertar al levantar la muñeca.
