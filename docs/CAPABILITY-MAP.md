@@ -35,7 +35,7 @@ Las fases 0 y 1 pueden solaparse una vez fijado `pet_view_t` (qué necesita el r
 
 ### Fase 2: firmware
 Orden:
-1. **Pruebas en el reloj** R1 (sonda de radio: APs, tiempos, heap interno ≥ 30 KB) y D1 (flush LVGL de la escena ≤ 40 ms), en `ota_4`. Tamaño con WiFi ya medido: 0,99 MiB.
+1. **Pruebas en el reloj** R1 (sonda de radio) y D1 (flush LVGL de la escena) en `ota_4`: **hechas el 2026-10-17, ambas superadas** (heap mínimo 86 KB frente a ≥ 30; flush 14 ms frente a ≤ 40). `ota_4` borrado y `otadata` en blanco. Tamaño con WiFi ya medido: 0,99 MiB.
 2. **Consumo** E0–E2 (`PET_TECH.md`, sección 8): fija la frecuencia de escaneo (T10, T11).
 3. Bring-up: render propio en el panel, táctil, botones, RTC.
 4. Radio real → `pet_ingest_scan`; persistencia en NVS.

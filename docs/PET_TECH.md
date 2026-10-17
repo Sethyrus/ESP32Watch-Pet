@@ -85,7 +85,7 @@ El juego, el render y los iconos tienen ~530 KB de margen. Si algún día no cup
 - **Escena:** `pet_render` dibuja la criatura en 48×48 indexado y `pet_blit_scaled_rgb565` la escala ×6 a un búfer RGB565 de 288×288 (166 KB) en **PSRAM**, mostrado con un `lv_image` (o `lv_canvas`). Doble búfer: se dibuja en el oculto sin el bloqueo de LVGL y se intercambia + `lv_obj_invalidate()` con el bloqueo tomado. Solo se invalida cuando el frame cambia.
 - **Menús, despensa, ajustes, HUD:** widgets LVGL.
 - **Búfer de dibujo de LVGL: `buffer_lines = 20`** (2 × 410 × 20 × 2 B ≈ 33 KB de RAM interna DMA, frente a ~82 KB por defecto) para dejar sitio a WiFi (sección 5).
-- **Prueba de humo en F2:** medir el tiempo de flush de la región 288×288; objetivo ≤ 40 ms por frame (12,5 fps con holgura). **Plan B** si no llega: el segundo modo de core (`bsp_display_new()` + bandas DMA como `ESP32Watch-Fluid/components/fluid_engine/fluid_render.c` / `ESP32Watch-Doom/components/doom_app/doom_port.c`), con LVGL solo para menús. `pet_render` no cambia, porque no sabe por qué camino sale el frame.
+- **Prueba D1 [medido 2026-10-17, `tools/probes/scene_probe.c`]:** render de la criatura 4,4 ms + `lv_refr_now` con flush de la imagen 288×288 en PSRAM **14 ms de media (máx. 17)** con `buffer_lines = 20`: ≈ 18 ms por frame, el doble de holgura que el objetivo (≤ 40 ms). **Plan B** si no llega: el segundo modo de core (`bsp_display_new()` + bandas DMA como `ESP32Watch-Fluid/components/fluid_engine/fluid_render.c` / `ESP32Watch-Doom/components/doom_app/doom_port.c`), con LVGL solo para menús. `pet_render` no cambia, porque no sabe por qué camino sale el frame.
 - Nunca `bsp_display_start()` (`GOTCHAS.md`, «BSP Registra El Panel Como RGB»).
 - **Esquinas redondeadas** (~100 px de radio, medido en pocket-tank): nada importante en ellas.
 - **Contra el quemado:** desplazamiento de la escena de 1–3 px cada ~60 s; brillo reducido en modo mesa. AOD no existe en core; comportamiento del panel a brillo muy bajo **[medir en F2]**.
@@ -136,6 +136,8 @@ RAM interna estática (`idf.py size`, DIRAM de 341.760 B) [verificado]:
 | Pet + WiFi por defecto | 197,8 KB | 144 KB |
 | **Pet + WiFi solo-escaneo** | **177,2 KB** | **164,6 KB** |
 
+**Medido en el reloj [2026-10-17]:** con LVGL (`buffer_lines = 20`) y la escena arrancadas quedan **165,6 KB** libres en RAM interna. Con WiFi iniciado bajan a ~89 KB y el **mínimo durante el escaneo fue 86 KB** (criterio ≥ 30 KB: sobrado); al hacer `deinit` se recuperan los 64 KB. **Pilas:** `pet_render_creature` usa ~5,5 KB de pila (búferes de capas); las tareas que dibujan necesitan **≥ 8 KB** y `CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192` si se dibuja desde `main` (con los 3,5 KB por defecto hay desbordamiento de pila).
+
 En tiempo de ejecución esos ~165 KB se reparten entre los búferes de LVGL (~33 KB con `buffer_lines = 20`), las pilas de las tareas y el heap de WiFi mientras escanea **[medir en F2]**. Core ya vio con BLE que quedarse en ~12 KB congela la app sin aviso (`GOTCHAS.md`, «BLE Y RAM Interna»). Reglas:
 - Comprobar siempre el retorno de `xTaskCreate` y de `esp_wifi_init`; si falla, saltar el escaneo, nunca bloquearse.
 - Registrar `heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL)` en cada escaneo; **criterio de F2: mínimo ≥ 30 KB** durante un escaneo con la UI activa.
@@ -178,11 +180,11 @@ La sonda de radio está en `tools/probes/radio_probe.c` (compilada y validada en
 
 | Prueba | Qué mide |
 | --- | --- |
-| R1 | Sonda a 120 y 360 ms por canal: APs detectados, tiempos, heap interno mínimo (criterio ≥ 30 KB) |
+| R1 | Sonda a 120 y 360 ms por canal: APs detectados, tiempos, heap interno mínimo (criterio ≥ 30 KB). **Hecha:** 120 ms → 3-4 APs en 1,6 s; 360 ms → 4 APs en 4,7 s (init 150 ms, deinit 13-60 ms); heap mínimo 86 KB. Solo había 3-4 APs en el sitio de la prueba: repetir en una zona densa antes de dar 120 ms por definitivo |
 | E0 | Referencia: `watch_power_screen_off` en batería, sin radio |
 | E1 | Escaneo pasivo cada 5 min con init/deinit |
 | E2 | Escaneo cada 15 min |
-| D1 | LVGL: tiempo de flush de la escena 288×288 (objetivo ≤ 40 ms) |
+| D1 | LVGL: tiempo de flush de la escena 288×288 (objetivo ≤ 40 ms). **Hecha:** 14 ms (máx. 17) |
 
 Método de consumo de core: tendencia de tensión (mV/h), ≥ 3 h por prueba, en la muñeca. **Objetivo: el escaneo en muñeca añade ≤ 25 % sobre E0.** Con eso se fija la frecuencia; si no se alcanza a 15 min, se espacia o se condiciona al movimiento.
 

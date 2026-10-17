@@ -51,6 +51,7 @@ Registro de decisiones del proyecto. Criterio general (usuario, 2026-10-17): **p
 | R7 | El picoteo y la ausencia comen el bocado **más antiguo** y cuentan para la dieta: la dieta depende del entorno y el jugador la sesga. Alternativa descartada: comer siempre doméstico (todo jugador con salidas quedaría Hogareño aunque viva fuera). |
 | R8 | Las puntuaciones de familiaridad se actualizan por **épocas de ≥ 20 min**; así el modo mesa no promueve un AP a familiar en 5 min. |
 | R9 | Descenso pasivo de estadísticas lineal; la amortiguación solo en ganancias y pérdidas por evento. |
+| R10 | Tareas que dibujan con 8 KB de pila (medido: `pet_render` usa ~5,5 KB) y `ESP_MAIN_TASK_STACK_SIZE=8192`. |
 | R4 | Valores numéricos de `PET_DESIGN.md` como punto de partida; se calibran con los tests A1–A10 en F1. |
 
 ## Abiertas
@@ -58,5 +59,5 @@ Registro de decisiones del proyecto. Criterio general (usuario, 2026-10-17): **p
 | # | Decisión | Cuándo |
 | --- | --- | --- |
 | A1 | Nombre de la especie (candidatas: *Beacot*, *Sigmon*, *Aetherling*); el proyecto sigue siendo `ESP32Watch-Pet` | al ver la primera criatura (C1) |
-| A2 | Tiempo pasivo por canal (120–200 ms) | prueba R1 en F2 |
+| A2 | Tiempo pasivo por canal. **Provisional: 150 ms** (R1: 120 ms detectó lo mismo que 360 ms, 3-4 APs, pero en un sitio con pocas redes; ≈ 2 s de radio por escaneo). Confirmar en zona densa | F2 |
 | A3 | Umbral de quietud para el modo mesa | F2, en el reloj |
