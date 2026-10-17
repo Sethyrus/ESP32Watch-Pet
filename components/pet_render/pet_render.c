@@ -180,7 +180,10 @@ bool pet_render_creature(const pet_view_t *v, uint8_t *idx, int w, int h)
         for (int x = 0; x < PET_W; x++)
             if (L[y][x]) { if (top < 0) top = y; bot = y; }
     if (top < 0) return false;
+    const int dyc = (top + v->dy < 1) ? 1 - top : v->dy;   /* nunca sale del lienzo */
     const int s = top + (bot - top) / 3;
+    const int span = bot > top ? bot - top : 1;
+#define SHEAR(srcy) (v->variant == VAR_CLUMSY ? ((bot - (srcy)) * 3 / span) : 0)
     uint8_t T[PET_H][PET_W];
     memset(T, 0, sizeof T);
     for (int y = top; y <= bot; y++) {
@@ -191,11 +194,15 @@ bool pet_render_creature(const pet_view_t *v, uint8_t *idx, int w, int h)
         } else {
             oy = y;
         }
-        oy += v->dy;
-        if (oy >= 0 && oy < PET_H) memcpy(T[oy], L[y], PET_W);
+        oy += dyc;
+        if (oy >= 0 && oy < PET_H) {
+            int sx = SHEAR(y);
+            for (int x = 0; x < PET_W; x++)
+                if (L[y][x] && x + sx < PET_W) T[oy][x + sx] = L[y][x];
+        }
     }
-#define MAPY(yy) ((yy) + ((v->squash && (yy) <= s) ? 1 : 0) + v->dy)
-    const int ctop = top + (v->squash ? 1 : 0) + v->dy, cbot = bot + v->dy;
+#define MAPY(yy) ((yy) + ((v->squash && (yy) <= s) ? 1 : 0) + dyc)
+    const int ctop = top + (v->squash ? 1 : 0) + dyc, cbot = bot + dyc;
 
     memset(idx, PAL_BG, PET_W * PET_H);
     /* relleno + sombreado */
@@ -248,7 +255,7 @@ bool pet_render_creature(const pet_view_t *v, uint8_t *idx, int w, int h)
                     if (dx2 * dx2 * ry * ry + dy2 * dy2 * rx * rx <= 4 * rx * rx * ry * ry)
                         idx[y * PET_W + x] = PAL_LIGHT;
                 } else if (T[y - 1][x] == 1 && T[y + 1][x] == 1 && T[y][x - 1] == 1 && T[y][x + 1] == 1 &&
-                           (mix(hs ^ (uint32_t)((x < 24 ? x : 47 - x) * 64 + y)) % (v->variant == VAR_ODD ? 11 : 29)) == 0) {
+                           (mix(hs ^ (uint32_t)((x < 24 ? x : 47 - x) * 64 + y)) % (v->variant == VAR_ODD ? 17 : 29)) == 0) {
                     idx[y * PET_W + x] = v->variant == VAR_ODD ? PAL_LIGHT : PAL_ACCENT;
                 }
             }
@@ -273,14 +280,23 @@ bool pet_render_creature(const pet_view_t *v, uint8_t *idx, int w, int h)
             if (T[ctop + 5][x] == 1) { idx[(ctop + 5) * PET_W + x + 2] = PAL_WHITE; idx[(ctop + 6) * PET_W + x + 2] = PAL_WHITE; break; }
     }
 
+    if (v->food && v->stage != PET_EGG && my >= 0) {
+        int d = v->food + 1, fy = MAPY(y0 + my) + 3, fx = PET_W / 2 - d / 2;
+        for (int j = 0; j < d; j++)
+            for (int i = 0; i < d; i++) {
+                int dx = 2 * i - (d - 1), dy2 = 2 * j - (d - 1);
+                if (dx * dx + dy2 * dy2 <= (d - 1) * (d - 1) + d && fy + j < PET_H) idx[(fy + j) * PET_W + fx + i] = (i + j == 0) ? PAL_WHITE : PAL_ACCENT;
+            }
+    }
+
     /* cara */
     if (v->stage != PET_EGG && ey >= 0) {
-        const bmp_t *eye = (v->stage >= PET_JUVENILE ? EYES5 : EYES) + (v->expr < EXPR_COUNT ? v->expr : 0);
-        const bmp_t *mouth = &MOUTHS[v->expr < EXPR_COUNT ? v->expr : 0];
+        const bmp_t *eye = (v->stage >= PET_JUVENILE ? EYES5 : EYES) + (v->blink ? EXPR_SLEEP : (v->expr < EXPR_COUNT ? v->expr : 0));
+        const bmp_t *mouth = &MOUTHS[v->mouth_open ? EXPR_HUNGRY : (v->expr < EXPR_COUNT ? v->expr : 0)];
         const int look = v->variant == VAR_ODD ? 1 : v->look_x;
-        int exl = x0 + ex + look, eyy = MAPY(y0 + ey);
+        int exl = x0 + ex + look + SHEAR(y0 + ey), eyy = MAPY(y0 + ey);
         const int ryo = v->variant == VAR_CLUMSY ? 1 : 0;
-        int exr = PET_W - 1 - (x0 + ex) - (eye->w - 1) + look;
+        int exr = PET_W - 1 - (x0 + ex) - (eye->w - 1) + look + SHEAR(y0 + ey);
         bool blush = t.pattern == 3 || v->expr == EXPR_HAPPY || v->expr == EXPR_LOVE;
         if (blush) {
             int by = eyy + eye->h;
@@ -292,12 +308,12 @@ bool pet_render_creature(const pet_view_t *v, uint8_t *idx, int w, int h)
         }
         draw_bmp(idx, eye, exl, eyy, false);
         draw_bmp(idx, eye, exr, eyy + ryo, true);
-        if (my >= 0) draw_bmp(idx, mouth, PET_W / 2 - mouth->w / 2 - ryo, MAPY(y0 + my), false);
+        if (my >= 0) draw_bmp(idx, mouth, PET_W / 2 - mouth->w / 2 - ryo + SHEAR(y0 + my), MAPY(y0 + my), false);
         const int ay = ctop > 6 ? ctop - 5 : 1, ax = PET_W - 13;
         const int ty = eyy + eye->h;   /* bajo el ojo */
         switch (v->expr) {
         case EXPR_LOVE:     adorn(idx, ax, ay, 3, (const char *[]){"r.r", "rrr", ".r."}); break;
-        case EXPR_SLEEP:    adorn(idx, ax, ay, 3, (const char *[]){"HHH", ".H.", "HHH"}); break;
+        case EXPR_SLEEP:    adorn(idx, ax, ay - v->zstep, 3, (const char *[]){"HHH", ".H.", "HHH"}); break;
         case EXPR_SURPRISE: adorn(idx, ax + 1, ay - 1, 5, (const char *[]){"H", "H", "H", ".", "H"}); break;
         case EXPR_ANGRY:    adorn(idx, ax, ay, 3, (const char *[]){"r.r", ".r.", "r.r"}); break;
         case EXPR_SAD:      adorn(idx, exl, ty, 2, (const char *[]){"H", "H"}); break;

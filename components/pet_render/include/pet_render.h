@@ -47,6 +47,10 @@ typedef struct {
     int8_t  dy;         /* desplazamiento vertical (botar) */
     int8_t  look_x;     /* mirada, -1..1 */
     uint8_t variant;    /* 0 normal, 1 pulida, 2 torpe, 3 rara */
+    uint8_t mouth_open; /* boca abierta (comer) */
+    uint8_t food;       /* bocado en pantalla: 0 nada, 1..4 tamano restante */
+    uint8_t zstep;      /* altura de la "z" al dormir (0..3) */
+    bool    blink;      /* parpadeo: ojos cerrados sin cambiar la boca */
 } pet_view_t;
 
 typedef struct { int w, h; } pet_size_t;
@@ -65,3 +69,10 @@ void pet_palette_rgb888(uint32_t seed, uint32_t out[PAL_COUNT]);
 /* Escala entera por vecino mas cercano a RGB565 (dst_stride en pixeles). */
 void pet_blit_scaled_rgb565(const uint8_t *idx, int w, int h, int scale,
                             const uint16_t *pal, uint16_t *dst, int dst_stride);
+
+/* Animaciones: transformaciones sobre la vista, cuantizadas a PET_FRAME_MS. */
+#define PET_FRAME_MS 80
+typedef enum { ANIM_IDLE, ANIM_BOUNCE, ANIM_EAT, ANIM_SLEEP, ANIM_COUNT } pet_anim_t;
+uint32_t pet_anim_duration_ms(pet_anim_t a);   /* 0 = ciclica sin fin (idle) */
+/* Rellena squash, dy, look_x, blink, mouth_open, food, zstep (y expr en dormir) segun t_ms. */
+void pet_pose(pet_view_t *v, pet_anim_t a, uint32_t t_ms);

@@ -15,11 +15,13 @@ Estado: **lista para arrancar.** Módulos, orden de construcción y puertas de s
 
 ## Fases
 
-### Fase 0: arte (mayor riesgo, va primero)
+### Fase 0: arte (mayor riesgo, va primero) — **hecha (C0–C4 aprobados el 2026-10-17)**
 1. Simulador mínimo + generador de hojas de contacto con la primera criatura de prueba.
 2. **C0:** guía de estilo + moodboard + paleta aprobados.
 3. **C1:** cría y juvenil con la cara completa. **C2:** los dos adultos y variantes. **C3:** animaciones en tira.
 4. **C4 (salida de la fase):** hoja de referencia aprobada con 4 etapas, ≥ 2 adultos y animaciones básicas; hojas aprobadas guardadas.
+
+Resultado: `components/pet_render` (huevo, cría blob, juvenil pera, adultos Hogareño y Explorador, variantes pulida/torpe/rara, 8 expresiones, animaciones idle/botar/comer/dormir), `tools/sim` (`make check`, `make sheets`) y las hojas de referencia en `docs/art/approved/`. Pendiente para más adelante: iconos de comida, huevo agrietado al eclosionar, ventana SDL2 interactiva.
 
 ### Fase 1: motor en PC
 1. `pet_core`: estado, despensa, familiaridad por BSSID, comida, ánimo, decisiones, evolución, errores de cuidado.

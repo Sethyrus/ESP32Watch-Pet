@@ -1,6 +1,6 @@
 # Style Guide: arte inicial
 
-Estado: **borrador (v0) para aprobar en el punto de control C0.** Es la guía contra la que el agente revisa las hojas de contacto. Se ajustará con lo que se vea en pantalla. Antecedentes y fuentes en `RESEARCH.md` (sección 7); mecánicas en `PET_DESIGN.md`.
+Estado: **aprobada en C0–C4 (2026-10-17).** Referencia visual en `docs/art/approved/`. Es la guía contra la que el agente revisa las hojas de contacto. Se ajustará con lo que se vea en pantalla. Antecedentes y fuentes en `RESEARCH.md` (sección 7); mecánicas en `PET_DESIGN.md`.
 
 ## 1. Enfoque
 
@@ -60,7 +60,7 @@ Base **Sweetie-16** (GrafxKid, vía Lospec; las paletas de color no tienen copyr
 | --- | --- | --- |
 | Huevo | 20×24 | 120×144 |
 | Cría | 24×24 | 144×144 |
-| Juvenil | 32×32 | 192×192 |
+| Juvenil (pera) | 32×32 | 192×192 |
 | Adulto (A y B) | 40×40 | 240×240 |
 
 - **Formato de máscara:** cadenas ASCII en C, **medias máscaras espejadas** (la mitad del trabajo y simetría gratis), con códigos al estilo Bollinger:
