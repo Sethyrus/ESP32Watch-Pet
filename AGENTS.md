@@ -34,6 +34,6 @@
 
 ## Working Rules
 - Privacy: scans are passive only; never store or log raw BSSID/SSID, only salted hashes (`PET_TECH.md`, section 4).
-- Deployment: one code base, two installs (launcher app in a slot, or standalone via `PET_STANDALONE`). Deep sleep does not work under the Launcher (`watch_launcher_boot_once()` returns to `factory`); see `PET_TECH.md`, section 2.
+- Deployment: one binary, two installs: launcher app in `ota_5` or standalone in `factory` (`idf.py flash`); the mode is detected at runtime with `watch_launcher_is_available()`. Keep the image ≤ 1.5 MiB so standalone fits `factory`. Deep sleep does not work under the Launcher (`watch_launcher_boot_once()` returns to `factory`); see `PET_TECH.md`, section 2. Background scans with the screen off use `watch_power_screen_off(timeout, stay_awake)`, not `watch_power_sleep()` (it turns the screen on when the timeout fires).
 - Do not commit, tag or push unless the user asks.
 - Never leave a test or benchmark firmware flashed on the watch without saying so.

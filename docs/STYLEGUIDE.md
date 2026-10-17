@@ -127,7 +127,7 @@ Cuantizadas a ~80 ms (12,5 pasos/s) para conservar el aire pixel art:
 
 ## 7. Iconos y texto
 - Iconos de comida (doméstico, exótico, urbano), huevo, despensa, batería: **bitmaps de paleta 16×16 / 24×24 de 3 tonos**, escritos a mano y convertidos a arrays de C (script en `tools/`).
-- Texto: fuente bitmap propia (5×7). Tipografía fina de LVGL solo si se adopta (`DECISIONS.md`).
+- Texto de interfaz con fuentes LVGL (la UI es LVGL, `DECISIONS.md` T5). Para coherencia pixel art se puede convertir una fuente pixel a formato LVGL con `lv_font_conv`; se decide en C0.
 
 ## 8. Contra el quemado
 - Desplazamiento de toda la escena de 1–3 px de pantalla cada ~60 s.

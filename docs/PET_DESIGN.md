@@ -1,6 +1,6 @@
 # Pet Design: especificación de producto
 
-Estado: **borrador para revisión**. Sustituye al stub anterior y a `SPEC-pet.md`. Los números son **valores iniciales propuestos**, a validar con el simulador headless en la fase 1 (se marcan como *inicial*). Lo técnico está en `PET_TECH.md`, el arte en `STYLEGUIDE.md`, las decisiones pendientes en `DECISIONS.md`, y el porqué de cada mecánica en `RESEARCH.md`.
+Estado: **lista para arrancar** (decisiones en `DECISIONS.md`). Sustituye al stub anterior y a `SPEC-pet.md`. Los números son **valores iniciales propuestos**, a validar con el simulador headless en la fase 1 (se marcan como *inicial*). Lo técnico está en `PET_TECH.md`, el arte en `STYLEGUIDE.md`, las decisiones pendientes en `DECISIONS.md`, y el porqué de cada mecánica en `RESEARCH.md`.
 
 ## 1. Objetivo
 
@@ -125,11 +125,11 @@ Si la despensa está llena se descarta primero el bocado más antiguo de tipo do
 - Ejes posteriores (WiFi/BLE) añadirán ramas sin tocar estas.
 
 ### Error de cuidado
-Una necesidad (saciedad o ánimo ≤ 5) que **sigue así 15 minutos de tiempo activo** sin respuesta del jugador cuenta 1 error (ventana de atención de P1). Con la app cerrada o el reloj apagado (ausencia): **máximo 1 error por cada 12 h de ausencia y 2 por ausencia.** Los errores se reinician en cada evolución (Digimon).
+Una necesidad (saciedad o ánimo ≤ 5) que **sigue así 15 minutos de tiempo activo** sin respuesta del jugador cuenta 1 error (ventana de atención del Tamagotchi P1). Con la app cerrada o el reloj apagado (ausencia): **máximo 1 error por cada 12 h de ausencia y 2 por ausencia.** Los errores se reinician en cada evolución (Digimon).
 
 ## 8. Tiempo, sueño y ausencia
 
-- **Noche** (RTC, hora local, sin zona horaria): 23:00–08:00 por defecto, ajustable. De noche no se escanea ni se come; el despertar por toque es posible (la mascota se muestra adormilada 10 s, sin penalización).
+- **Noche** (RTC, hora local, sin zona horaria): 23:00–08:00 por defecto, ajustable. De noche no se escanea ni se come; si se enciende la pantalla (con botón) la mascota se muestra adormilada 10 s, sin penalización.
 - **Tiempo ausente:** al arrancar se ejecuta **un único paso** que simula el hueco `dt = ahora − última marca` (tope 7 días; si el RTC perdió la hora, `dt = 0` y se avisa). Reglas (*inicial*):
   1. La despensa envejece y caduca.
   2. La mascota picotea de la despensa (aprovechamiento 50 %) por tramos de 1 h.
@@ -172,10 +172,10 @@ Pantalla vertical 410×502 con esquinas redondeadas (~100 px de radio, según po
 - **Despensa:** lista de bocados por tipo con cantidad y tiempo hasta caducar; tocar uno lo da a la mascota.
 - **BOOT** = aceptar/acción principal (abre la despensa; confirma). **PWR corto** = atrás/menú; en la raíz y en modo app, vuelve al Launcher (convención de core, `ARCHITECTURE.md`, "Convencion De Botones").
 - **Ajustes:** noche (inicio y fin), sonido, brillo, reiniciar mascota (con confirmación).
-- Interfaz con render propio o LVGL bajo demanda: pendiente en `DECISIONS.md`.
+- Widgets con LVGL y escena de la criatura como imagen generada por `pet_render` (`DECISIONS.md`, T5).
 
 ## 11. Sonido
-Pitidos y melodías cortas de onda cuadrada o triangular generadas en C (sin WAV), para: señal nueva descubierta, caricia, llamada de hambre. **Silenciable** y apagado de noche. Pendiente de confirmar (`DECISIONS.md`).
+Pitidos y melodías cortas de onda cuadrada o triangular generadas en C (sin WAV), para: señal nueva descubierta, caricia, llamada de hambre. **Silenciable** y apagado de noche. Es lo último de la fase 2 y se recorta si complica el consumo (`DECISIONS.md`, R3).
 
 ## 12. Privacidad y datos
 - Solo escaneo **pasivo**: nunca conectarse ni interactuar con redes ajenas.

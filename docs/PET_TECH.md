@@ -1,6 +1,6 @@
 # Pet Tech: especificación técnica
 
-Estado: **borrador para revisión**. Producto en `PET_DESIGN.md`; decisiones pendientes en `DECISIONS.md`. Todo lo que dependa de hardware no medido o de código de core no revisado a fondo se marca **[verificar]** y se convierte en una tarea de la fase 2.
+Estado: **lista para arrancar.** Producto en `PET_DESIGN.md`; decisiones en `DECISIONS.md`. Lo verificado el 2026-10-17 (código de core, compilaciones de prueba) se marca **[verificado]**; lo que solo puede medirse en el reloj, **[medir en F2]**.
 
 ## 1. Estructura
 
@@ -9,143 +9,194 @@ ESP32Watch-Pet/
 ├── components/
 │   ├── pet_core/      C99 puro: estado, reglas, tiempo, serialización. Sin ESP-IDF.
 │   ├── pet_render/    C99 puro: paleta, máscaras, cara, animación → búfer indexado.
-│   └── pet_app/       ESP-IDF: HAL, radio, persistencia, UI, modos (usa watch_board).
-├── tools/sim/         Simulador PC: SDL2 interactivo + modo headless (tests, hojas).
+│   └── pet_app/       ESP-IDF: UI (LVGL), radio, persistencia, energía (usa watch_board).
+├── tools/
+│   ├── sim/           Simulador PC: tests headless, hojas de contacto, ventana SDL2.
+│   └── probes/        Firmwares de medición (no son la app; ver sección 8).
 ├── tests/             Tests headless de ciclo de vida (compilan con `cc`).
 └── docs/
 ```
 
-`pet_core` y `pet_render` no incluyen cabeceras de ESP-IDF ni de SDL: reciben el tiempo, el azar y las entradas como parámetros, de modo que **el mismo código compila para el simulador, los tests y el firmware** (patrón de pocket-tank y de `fluid_engine`/`tools/host_bench` de Fluid). El componente de lógica se llamaba `pet_engine` en `AGENTS.md`; se unifica en `pet_core` + `pet_render`.
+`pet_core` y `pet_render` no incluyen cabeceras de ESP-IDF, LVGL ni SDL: reciben el tiempo, el azar y las entradas como parámetros, de modo que **el mismo código compila para el simulador, los tests y el firmware** (patrón de pocket-tank y de `ESP32Watch-Fluid/components/fluid_engine` + `tools/host_bench`).
 
-### API de `pet_core` (boceto, a concretar en la fase 1)
+### API de `pet_core` (boceto, se concreta en F1)
 
 ```c
 void   pet_init(pet_state_t *s, uint64_t seed, int64_t now_s);
-void   pet_step(pet_state_t *s, int64_t now_s, const pet_inputs_t *in);   // tiempo activo
+void   pet_step(pet_state_t *s, int64_t now_s, const pet_inputs_t *in);   // tiempo activo; tolera dt grandes
 void   pet_catch_up(pet_state_t *s, int64_t now_s);                       // hueco ausente, un solo paso
 void   pet_ingest_scan(pet_state_t *s, const pet_ap_t *aps, size_t n, int64_t now_s);
-bool   pet_feed(pet_state_t *s, pet_food_t type, int64_t now_s);          // acción del jugador
+bool   pet_feed(pet_state_t *s, pet_food_t type, int64_t now_s);
 void   pet_touch(pet_state_t *s, int64_t now_s);  /* y pet_shake, pet_usb_changed … */
+int64_t pet_next_scan_s(const pet_state_t *s, const pet_env_t *env);      // planificador
 size_t pet_save(const pet_state_t *s, uint8_t *buf, size_t cap);
-pet_load_t pet_load(pet_state_t *s, const uint8_t *buf, size_t len);      // valida y migra
+pet_load_t pet_load(pet_state_t *s, const uint8_t *buf, size_t len);      // valida CRC y migra
+void   pet_view(const pet_state_t *s, int64_t now_s, pet_view_t *out);    // lo que necesita el render
 ```
 
-- Determinista: el azar es un xorshift64* con su estado dentro de la partida; sin `rand()` ni `time()`.
-- `pet_ingest_scan` recibe BSSID en bruto, **calcula el hash con sal dentro** y descarta el BSSID: ninguna otra capa lo ve.
-- El estado se mantiene con sus contadores como enteros de punto fijo (no `float` en la serialización) para que los tests sean reproducibles entre plataformas.
+- Determinista: xorshift64* con su estado dentro de la partida; nada de `rand()` ni `time()`.
+- `pet_ingest_scan` recibe el BSSID en bruto, **calcula el hash con sal dentro** y lo descarta: ninguna otra capa lo guarda.
+- Serialización en enteros de punto fijo (sin `float`), para que tests y firmware den lo mismo.
 
 ### API de `pet_render` (boceto)
 
 ```c
-void pet_render_scene(const pet_view_t *v, uint8_t *fb_idx, int w, int h);  // búfer indexado
-const uint16_t *pet_palette_rgb565(void);                                    // ya con byte-swap según panel
+void pet_render_creature(const pet_view_t *v, uint32_t t_ms, uint8_t *idx, int w, int h); // 48×48 indexado
+void pet_blit_scaled_rgb565(const uint8_t *idx, int w, int h, int scale, const uint16_t *pal,
+                            uint16_t *dst, int dst_stride);                               // ×6 vecino más cercano
+const uint16_t *pet_palette_rgb565(void);
 ```
 
-## 2. Dos formas de instalarla (requisito del usuario)
+## 2. Instalación: app o standalone, mismo binario
 
-Un único repositorio y un único código, con un `Kconfig` `PET_STANDALONE` (por defecto `n`) que solo cambia `pet_boot.c`, la tabla de particiones y el modo de energía.
+**[verificado]** en `ESP32Watch-core/components/watch_board/watch_launcher.c`: `watch_launcher_is_available()` es verdadero solo si la imagen en ejecución **no** está en `factory` y existe `factory`; `watch_launcher_boot_once()` no hace nada en otro caso. Por tanto **no hace falta ningún Kconfig**: el mismo binario se comporta como app o como standalone según dónde se grabe.
 
-| | **Modo app** (`PET_STANDALONE=n`) | **Modo standalone** (`PET_STANDALONE=y`) |
+| | **App** (junto a las demás) | **Standalone** (único firmware) |
 | --- | --- | --- |
-| Instalación | en un slot OTA junto a las demás apps (`flash_all.sh`) | única imagen del reloj |
-| Arranque | `watch_launcher_boot_once()` primero; PWR en la raíz llama a `watch_launcher_exit()` | sin salida al Launcher |
-| Vive mientras... | la app está abierta | siempre |
-| Segundo plano | light sleep con despertar por timer para escanear **mientras la app está abierta**; con la app cerrada actúa `pet_catch_up()` al reabrir | igual, siempre |
-| Tabla de particiones | la compartida del Launcher (no se toca) | **[verificar]** propia, con una imagen más grande si no cabe en `factory` (1,5 MB) |
-| Pantalla de reposo | apagada; se despierta con botones | esfera mínima con la hora, como alternativa al reloj del Launcher |
+| Cómo se graba | `flash_all.sh` del Launcher, slot **`ota_5`** (2 MB) | `idf.py flash` desde este repo: escribe la app en `factory` (0x20000, 1,5 MB) y un `otadata` en blanco; **sustituye al Launcher** |
+| `watch_launcher_is_available()` | `true` | `false` |
+| PWR en la raíz | vuelve al Launcher (`watch_launcher_exit()`) | no hace nada (convención de core, `ARCHITECTURE.md`) |
+| Vive mientras... | la app está abierta; al reabrir se ejecuta `pet_catch_up()` | siempre |
+| Tabla de particiones | la compartida (sin cambios) | la misma |
+| Volver al estado anterior | — | `flash_all.sh` del Launcher reinstala todo |
 
-Reglas y límites **[verificar]** antes de comprometerse:
-- **Deep sleep no es viable en modo app:** `watch_launcher_boot_once()` devuelve el arranque a `factory`, así que al despertar arrancaría el Launcher (`ESP32Watch-core/components/watch_board/watch_launcher.c`). En standalone sí es técnicamente posible, pero `watch_board` solo ofrece light sleep y core no ha medido deep sleep ni sus efectos sobre los raíles del AXP2101 (el panel sigue alimentado por ALDO2, posible suelo de consumo). **Primero light sleep; deep sleep solo si la medición lo justifica.**
-- El tamaño del binario con WiFi + render propio debe caber en 2 MB (slot) o decidir la tabla de standalone. Primera tarea de la fase 2: compilar un esqueleto con WiFi y medir (`idf.py size`).
-- Cómo se comporta `watch_launcher_is_available()` cuando la app está sola en `factory` [verificar]; el modo standalone depende de que devuelva `false`.
-- Cambiar offsets de particiones es una operación del Launcher (su `AGENTS.md`): un `partitions` de standalone es una desviación deliberada y debe aprobarse (`DECISIONS.md`).
-- **Esfera/servicio dentro del Launcher** queda como futuro: `pet_core` sin dependencias permite integrarlo sin reescribir, y se evalúa solo si no limita otras funciones.
+**Presupuesto de flash (restricción de diseño): ≤ 1,5 MiB**, para que el standalone quepa en `factory`. Medido con una compilación de prueba [verificado]:
 
-Slot en modo app: `ota_5` (libre; `ota_4` es el slot de pruebas de core, `PMU_SAFETY.md` "Herramientas"). Requiere una línea en `ESP32Watch-Launcher/apps.conf` y una entrada en `KNOWN[]` de `components/launcher/os_apps.c` (color, icono, descripción) al arrancar el desarrollo.
+| Imagen | Binario | Libre en `factory` |
+| --- | --- | --- |
+| Plantilla (sin WiFi) | 0,72 MiB | — |
+| Pet + WiFi por defecto (con `esp_netif`/lwip) | 1,16 MiB | 22 % |
+| **Pet + WiFi solo-escaneo** (config de la sección 4) | **0,99 MiB** | **34 % (~530 KB)** |
 
-## 3. Render
+El juego, el render y los iconos tienen ~530 KB de margen. Si algún día no cupiera, el modo app seguiría funcionando (slot de 2 MB) y el standalone necesitaría una tabla propia, decisión que pasaría por el Launcher.
 
-- **Escena propia** (no LVGL) para la criatura y su entorno: búfer **indexado de 8 bit** → paleta RGB565 con byte-swap → escalado entero por vecino más cercano → bandas por DMA con `esp_lcd_panel_draw_bitmap`. Es exactamente el camino de `DG_DrawFrame` en `ESP32Watch-Doom/components/doom_app/doom_port.c` y de las bandas con suciedad de `ESP32Watch-Fluid/components/fluid_engine/fluid_render.c` (alineación de ventanas par/impar del panel incluida). Se reutiliza el patrón, no se importa código.
-- **Resolución lógica y escala** (decisión abierta): criatura 48×48 a ×6 = 288×288 (propuesta), o rejilla de pantalla completa 82×100 a ×5 = 410×500. Con la rejilla completa todo es pixel art coherente (texto de fuente bitmap 5×7 → 25×35 px por carácter, ~13 caracteres por línea); con la criatura sola, la UI puede ir con otra resolución.
-- **Menús y ajustes:** propuesta de **LVGL bajo demanda** como hace `ESP32Watch-Fluid/components/fluid_app/fluid_menu.c` (LVGL sin `esp_lvgl_port`, flush propio y asignador en PSRAM `lv_mem_core_psram.c`) frente a render propio para todo. Pendiente en `DECISIONS.md`.
-- **Panel:** `bsp_display_new()` como Doom y Fluid, nunca `bsp_display_start()` (registra el panel QSPI como RGB: desbordamiento de heap). Confirmar con core `docs/ARCHITECTURE.md` ("los dos modos de pantalla") qué ofrece `watch_display_start()` sin LVGL **[verificar]**.
-- **Esquinas redondeadas** (~100 px, medido en pocket-tank): HUD fuera de las esquinas.
-- **Memoria:** el búfer lógico es de 2–10 KB; no existe un framebuffer completo (411 KB en RGB565). Las bandas de salida (16 líneas) van en memoria DMA.
-- **Contra el quemado:** desplazamiento de píxeles de 1–2 px cada ~60 s y brillo reducido en modo mesa. AOD no existe en core; comportamiento del panel a muy bajo brillo **[verificar]**.
-- Presupuesto: ≥ 25 fps cuando la pantalla está encendida (pocket-tank logra 30–32 fps con un render mucho más pesado).
+**Deep sleep: fuera del MVP en ambos modos.** En modo app es imposible (al despertar arrancaría el Launcher, porque `boot_once` apunta a `factory`). En standalone sería posible, pero `watch_board` solo ofrece light sleep y core no ha medido deep sleep ni el suelo de consumo con el panel alimentado (ALDO2). Usar el mismo camino en los dos modos evita dos comportamientos que probar. Se reconsidera solo si la medición de F2 lo justifica.
 
-## 4. Radio (WiFi pasivo)
+**Esfera/servicio dentro del Launcher:** futuro. `pet_core` sin dependencias permite integrarlo sin reescribir.
 
-- Solo WiFi en el MVP. BLE entra en una fase posterior, tras medir (core midió que **cualquier modo BLE cuesta 2,5–3,5× el reposo** y toma ~52 KB de RAM interna; `BRINGUP.md` "Bluetooth Y Consumo", `GOTCHAS.md` "BLE Y RAM Interna").
-- Modo STA con **escaneo pasivo** (`wifi_scan_config_t.scan_type = WIFI_SCAN_TYPE_PASSIVE`, `show_hidden = true`): solo se escuchan balizas; no se transmiten sondas ni se conecta a nada. Tiempo por canal y canales por defecto **[verificar en el código de ESP-IDF 5.5.4]**.
-- **Radio solo durante el escaneo:** `esp_wifi_init` → `start` → `scan` → `stop` → `deinit`, para liberar RAM interna y evitar consumo. Coste de arranque y pico de RAM a medir. Requiere `esp_netif` y el bucle de eventos por defecto.
-- `esp_wifi_set_storage(WIFI_STORAGE_RAM)` para que WiFi no escriba en el NVS compartido [verificar].
-- Resultado del escaneo → `pet_ap_t { uint8_t bssid[6]; int8_t rssi; bool open; bool hidden; }` → `pet_ingest_scan()`. **No se pasan ni almacenan SSID.** (La «abierta» sale de `authmode == WIFI_AUTH_OPEN`; «oculta» de SSID vacío.)
-- Planificador: el siguiente escaneo se calcula en `pet_core` (modo, noche, batería) y el firmware solo lo ejecuta. Sin escaneo de noche ni con batería baja [umbral a fijar].
-- **Hash:** SipHash-2-4 con clave de 16 bytes aleatoria generada en el primer arranque (`esp_random`) y guardada en la partida, truncado a 32 bits. Implementación propia en `pet_core` (unas 40 líneas; el algoritmo de referencia es de dominio público). La sal vive en el dispositivo y **nunca se exporta**.
+## 3. Pantalla y render
 
-## 5. Persistencia
+**Decisión: LVGL por el camino soportado de core (`watch_display_start()`, «UI con LVGL» en `ARCHITECTURE.md`).** Es el modo con el que `watch_power` gestiona sueño, táctil apagado en reposo y brillo [verificado en `watch_power.h`]; las apps con framebuffer propio (Fluid) tienen que copiar ese manejo a mano (`rev.md`: Fluid no tiene sueño por inactividad). La escena de una mascota no necesita 30 fps: la animación avanza a pasos de 80 ms (`STYLEGUIDE.md`).
 
-- NVS, namespace **`pet`**, con `watch_nvs_init()` y sin borrar nunca (regla del workspace). Añadir `pet` a la tabla de namespaces de core `docs/ARCHITECTURE.md` al arrancar el desarrollo.
-- **Doble copia A/B** (`save_a`, `save_b`): cabecera `{magic, version, seq, len, crc32}` + carga útil. Se escribe siempre la copia más antigua; al leer se elige la de `seq` más alto con CRC válido. Un corte de alimentación a mitad de escritura deja siempre una copia válida.
-- **Versionado:** la carga útil **solo crece por el final** (pocket-tank); un cambio semántico sube `version` y pasa por una tabla de migraciones en `pet_core` probada con partidas dorado de cada versión.
-- Tamaño estimado < 1 KB (estadísticas ~64 B; despensa 20 × 5 B; tablas de familiaridad 64 × 5 B; sal 16 B; contadores).
-- **Cuándo se guarda:** por eventos (comer, evolucionar, cambio de modo, entrar en sueño) con un mínimo de 30 s entre escrituras, más un latido cada 10 min (pocket-tank). Siempre antes de `watch_power_sleep()` largo y antes de volver al Launcher.
-- **Reloj:** se guarda el instante del RTC (hora local sin zona, `watch_rtc.h`). Si el RTC perdió la hora (`watch_rtc_time_was_lost()`) o la hora va hacia atrás, `dt = 0`. Un cambio de hora (DST) introduce a lo sumo ±1 h de error, irrelevante para estas mecánicas.
+- **Escena:** `pet_render` dibuja la criatura en 48×48 indexado y `pet_blit_scaled_rgb565` la escala ×6 a un búfer RGB565 de 288×288 (166 KB) en **PSRAM**, mostrado con un `lv_image` (o `lv_canvas`). Doble búfer: se dibuja en el oculto sin el bloqueo de LVGL y se intercambia + `lv_obj_invalidate()` con el bloqueo tomado. Solo se invalida cuando el frame cambia.
+- **Menús, despensa, ajustes, HUD:** widgets LVGL.
+- **Búfer de dibujo de LVGL: `buffer_lines = 20`** (2 × 410 × 20 × 2 B ≈ 33 KB de RAM interna DMA, frente a ~82 KB por defecto) para dejar sitio a WiFi (sección 5).
+- **Prueba de humo en F2:** medir el tiempo de flush de la región 288×288; objetivo ≤ 40 ms por frame (12,5 fps con holgura). **Plan B** si no llega: el segundo modo de core (`bsp_display_new()` + bandas DMA como `ESP32Watch-Fluid/components/fluid_engine/fluid_render.c` / `ESP32Watch-Doom/components/doom_app/doom_port.c`), con LVGL solo para menús. `pet_render` no cambia, porque no sabe por qué camino sale el frame.
+- Nunca `bsp_display_start()` (`GOTCHAS.md`, «BSP Registra El Panel Como RGB»).
+- **Esquinas redondeadas** (~100 px de radio, medido en pocket-tank): nada importante en ellas.
+- **Contra el quemado:** desplazamiento de la escena de 1–3 px cada ~60 s; brillo reducido en modo mesa. AOD no existe en core; comportamiento del panel a brillo muy bajo **[medir en F2]**.
 
-## 6. Tareas e integración en `watch_board`
+## 4. Radio: WiFi pasivo, solo escaneo
 
-Se sigue el patrón de la plantilla (`system_task` fuera del bloqueo de LVGL):
+**Configuración [verificado compilando]:** sin `esp_netif` ni lwip (no hace falta IP para escanear), solo el bucle de eventos por defecto.
 
-| Tarea | Función |
+```c
+wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+cfg.nvs_enable = 0;                               // WiFi no toca el NVS compartido
+esp_wifi_init(&cfg);
+esp_wifi_set_storage(WIFI_STORAGE_RAM);
+esp_wifi_set_mode(WIFI_MODE_STA);
+esp_wifi_set_country_code("ES", false);           // canales 1–13
+esp_wifi_start();
+wifi_scan_config_t sc = { .show_hidden = true, .scan_type = WIFI_SCAN_TYPE_PASSIVE,
+                          .scan_time.passive = PASSIVE_MS };
+esp_wifi_scan_start(&sc, true);                   // bloqueante; solo escucha balizas
+esp_wifi_scan_get_ap_records(&n, recs);
+esp_wifi_stop(); esp_wifi_deinit();               // radio y RAM liberadas hasta el siguiente
+```
+
+`sdkconfig.defaults` cuando entre la radio (F2):
+```
+CONFIG_ESP_WIFI_IRAM_OPT=n
+CONFIG_ESP_WIFI_EXTRA_IRAM_OPT=n
+CONFIG_ESP_WIFI_RX_IRAM_OPT=n
+CONFIG_LWIP_IRAM_OPTIMIZATION=n
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+CONFIG_ESP_WIFI_SOFTAP_SUPPORT=n
+CONFIG_ESP_WIFI_ENABLE_WPA3_SAE=n
+```
+
+- **Pasivo de verdad:** `WIFI_SCAN_TYPE_PASSIVE` no transmite sondas; nunca se llama a `esp_wifi_connect()`.
+- **Tiempo por canal:** el valor por defecto de IDF es 360 ms (`WIFI_PASSIVE_SCAN_DEFAULT_TIME`), unos 4,7 s de radio para 13 canales [verificado en la cabecera]. Las balizas salen cada ~102 ms, así que **120–200 ms** debería bastar. Se fija en F2 comparando APs detectados a 120 y 360 ms con la sonda.
+- **Datos que cruzan a `pet_core`:** `pet_ap_t { uint8_t bssid[6]; int8_t rssi; bool open; bool hidden; }` (abierta = `authmode == WIFI_AUTH_OPEN`; oculta = `ssid[0] == 0`). El SSID no sale del módulo de radio.
+- **Planificador:** `pet_next_scan_s()` decide según modo, noche y batería; el firmware solo ejecuta. Sin escaneo de noche ni con batería < 15 %.
+- **Hash:** SipHash-2-4 con clave de 16 bytes de `esp_random()` generada en el primer arranque, guardada en la partida y truncada a 32 bits. Implementación propia en `pet_core` (~40 líneas; el algoritmo de referencia es de dominio público). La clave nunca se exporta ni se registra en logs.
+
+## 5. RAM interna
+
+RAM interna estática (`idf.py size`, DIRAM de 341.760 B) [verificado]:
+
+| Imagen | DIRAM usada | Libre |
+| --- | --- | --- |
+| Plantilla | 150,7 KB | 191 KB |
+| Pet + WiFi por defecto | 197,8 KB | 144 KB |
+| **Pet + WiFi solo-escaneo** | **177,2 KB** | **164,6 KB** |
+
+En tiempo de ejecución esos ~165 KB se reparten entre los búferes de LVGL (~33 KB con `buffer_lines = 20`), las pilas de las tareas y el heap de WiFi mientras escanea **[medir en F2]**. Core ya vio con BLE que quedarse en ~12 KB congela la app sin aviso (`GOTCHAS.md`, «BLE Y RAM Interna»). Reglas:
+- Comprobar siempre el retorno de `xTaskCreate` y de `esp_wifi_init`; si falla, saltar el escaneo, nunca bloquearse.
+- Registrar `heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL)` en cada escaneo; **criterio de F2: mínimo ≥ 30 KB** durante un escaneo con la UI activa.
+- Búferes grandes (escena, LVGL heap) en PSRAM.
+
+## 6. Energía, sueño y tareas
+
+**Semántica de core [verificado en `watch_power.h`]:** `watch_power_sleep(timeout)` **vuelve a encender la pantalla** al despertar, también por timeout. Por eso **no sirve para escanear en segundo plano**. Se usa `watch_power_screen_off(timeout, stay_awake)`: panel apagado y LVGL en pausa; mientras `stay_awake()` devuelve `true` el chip no duerme; cuando devuelve `false` entra en light sleep (despertando cada ~200 ms para mirar PWR) **sin encender la pantalla**. Con USB el chip no duerme (USB-Serial-JTAG), cosa que encaja con el modo mesa.
+
+Patrón de escaneo con pantalla apagada:
+1. `system_task` llama a `watch_power_screen_off(0, pet_stay_awake)` al expirar la inactividad.
+2. `pet_stay_awake()` (llamado en cada despertar de ~200 ms) compara `esp_timer_get_time()` con la hora del siguiente escaneo; si toca, avisa a `radio_task` y devuelve `true` hasta que el escaneo termina y se guarda la partida. Se usa `esp_timer` porque avanza durante el light sleep; no se confía en `vTaskDelay` a través del sueño.
+3. BOOT o PWR despiertan la pantalla; el táctil no (decisión de core, coherente con el Launcher).
+
+| Tarea | Función | LVGL |
+| --- | --- | --- |
+| `pet_task` | dueña de `pet_state_t`: `pet_step`, ingesta de escaneos, guardado | nunca toma el bloqueo |
+| `ui_task` | `pet_view` → render → intercambio de búfer; widgets | `bsp_display_lock(timeout)` **con timeout**, porque `watch_power_*` retiene el bloqueo durante el sueño |
+| `radio_task` | ciclo de radio bajo demanda | no |
+| `system_task` | botones (`watch_boot_debouncer_*`, `watch_pwr_key_take_short_press`), inactividad, `watch_power_screen_off`, detección de modo | no (requisito de `watch_power`) |
+
+Otras piezas de `watch_board` (v0.5.1):
+- `watch_battery_read()` → `usb`, `percent`: detección de mesa y batería baja (como mucho una lectura por segundo).
+- `imu_service_read()` (sondeo a ~20 ms) solo con pantalla encendida o en ventanas cortas: toque/sacudida/levantar y **quietud propia** (desviación de la aceleración < umbral durante 60 s; no existe en core).
+- `watch_rtc_*`, `watch_nvs_init()`, `watch_power_quiet_peripherals()` al arrancar, `watch_display_set_brightness()`.
+- **No se escribe ningún registro del AXP2101** (`PMU_SAFETY.md`).
+
+## 7. Persistencia
+
+- NVS, namespace **`pet`**, `watch_nvs_init()`, nunca se borra.
+- **Doble copia A/B** (`save_a`, `save_b`): cabecera `{magic, version, seq, len, crc32}` + carga útil. Se escribe la copia más antigua; al leer se toma la de `seq` mayor con CRC válido.
+- **Versionado:** la carga útil solo crece por el final (pocket-tank); cambios semánticos suben `version` y pasan por migraciones en `pet_core`, probadas con partidas dorado.
+- Tamaño < 1 KB (estadísticas ~64 B; despensa 20 × 5 B; familiaridad 64 × 5 B; clave 16 B).
+- **Cuándo:** por eventos (comer, evolucionar, cambio de modo, tras escanear, antes de dormir y antes de `watch_launcher_exit()`) con ≥ 30 s entre escrituras, más latido cada 10 min.
+- **Reloj:** instante del RTC (hora local sin zona). Si `watch_rtc_time_was_lost()` o la hora retrocede, `dt = 0`.
+
+## 8. Medición en el reloj (primer hito de F2)
+
+La sonda de radio está en `tools/probes/radio_probe.c` (compilada y validada en una copia de Pet; no forma parte de la app). Mide tiempo de init/escaneo/deinit, APs detectados y heap interno con la UI arrancada.
+
+| Prueba | Qué mide |
 | --- | --- |
-| `pet_task` | tick del juego (≈10 Hz con pantalla encendida, mucho menos en reposo) y render (≈25–30 fps solo con pantalla encendida) |
-| `radio_task` | espera la hora del siguiente escaneo, ejecuta el ciclo de radio, entrega el resultado a `pet_task` por cola |
-| `system_task` | botones (`watch_boot_debouncer_*`, `watch_pwr_key_take_short_press`), inactividad, `watch_power_sleep()`/`watch_power_screen_off()`, detección de modo |
+| R1 | Sonda a 120 y 360 ms por canal: APs detectados, tiempos, heap interno mínimo (criterio ≥ 30 KB) |
+| E0 | Referencia: `watch_power_screen_off` en batería, sin radio |
+| E1 | Escaneo pasivo cada 5 min con init/deinit |
+| E2 | Escaneo cada 15 min |
+| D1 | LVGL: tiempo de flush de la escena 288×288 (objetivo ≤ 40 ms) |
 
-Uso de `watch_board` (v0.5.1, anclado por etiqueta):
-- `watch_battery_read()` → `usb`, `percent`, estado de carga: base de la detección de modo y del escaneo con batería baja.
-- `imu_service_read()` (sondeo a ~20 ms, solo con pantalla encendida o en una ventana corta para detectar quietud) → toque/sacudida/levantar; **la quietud en mesa necesita una ventana de desviación de aceleración propia** (no existe en core). Despertar por IMU no está validado (INT GPIO21).
-- `watch_rtc_*`, `watch_nvs_init()`, `watch_power_quiet_peripherals()` al arrancar, `watch_display_*` para brillo y sueño (el táctil se apaga en sleep, `GOTCHAS.md` "Tactil En Sleep").
-- **No se escribe ningún registro del AXP2101** (`PMU_SAFETY.md`); este proyecto no toca el PMIC.
-- Wake: **solo botones** en el MVP (coherente con la dirección «wake only by buttons» del Launcher).
+Método de consumo de core: tendencia de tensión (mV/h), ≥ 3 h por prueba, en la muñeca. **Objetivo: el escaneo en muñeca añade ≤ 25 % sobre E0.** Con eso se fija la frecuencia; si no se alcanza a 15 min, se espacia o se condiciona al movimiento.
 
-## 7. Simulador y herramientas
+Las pruebas se graban en **`ota_4`** (slot de pruebas de core) y se lanzan desde el Launcher. **Nunca se dejan grabadas sin avisar**; al terminar se borra el slot o se reinstala lo normal.
 
-`tools/sim/` compila el núcleo con `cc` para:
-1. **Tests headless** (`tests/`): simulan semanas con dietas distintas y comprueban los criterios A1–A10 de `PET_DESIGN.md`. Se ejecutan sin ventana y sin ESP-IDF. Patrón reutilizable: `ESP32Watch-Fluid/tools/host_bench/run.sh` (build con `cc`, escenario guionizado, fallo ante estado inválido).
-2. **Generador de hojas de contacto**: PNG a escala real (410×502) con etapas × ramas × variantes × expresiones × frames, más tira de frames o GIF. PNG con `stb_image_write` (una cabecera, vendorizada con su aviso); GIF mediante tira de PNG + herramienta externa, o `gifenc` si su licencia lo permite [verificar].
-3. **Ventana SDL2 interactiva**: ratón como táctil, teclado como botones y como sensores (sacudida, USB, avance rápido del tiempo). Aviso: no hay ningún simulador SDL en el workspace; es trabajo nuevo.
-4. **Avance rápido del tiempo** (×1, ×60, ×3600) para ver una vida entera en minutos.
+## 9. Trabajo entre repositorios (cuando haya firmware jugable)
 
-## 8. Plan de medición de consumo (primer hito de la fase 2)
+- Launcher: `pet ota_5 ../ESP32Watch-Pet` en `apps.conf` y entrada en `KNOWN[]` (`components/launcher/os_apps.c`).
+- Core: fila en la tabla de repos de `workspace/AGENTS.md`; namespace `pet` en `docs/ARCHITECTURE.md`; los hallazgos de WiFi y consumo a `docs/` de core (WiFi nunca se había usado en el reloj).
+- `ESP32Watch-core/tools/check_apps.sh` sin avisos.
 
-Antes de fijar ninguna frecuencia de escaneo. Se usa el método de core (tendencia de tensión de batería, mV/h; línea base del Launcher ≈ 24 mV/h ≈ 12 mA en reposo sin BLE, `launcher-baseline-test`):
+## 10. Riesgos
 
-| Prueba | Descripción |
-| --- | --- |
-| E0 | Referencia: light sleep sin radio |
-| E1 | Escaneo pasivo cada 5 min, radio init/deinit en cada escaneo |
-| E2 | Igual cada 15 min |
-| E3 | WiFi iniciada y ociosa (descartable si E1/E2 ya son bajos) |
-| E4 | Mesa: pantalla atenuada con USB (solo funcional, no de consumo) |
-
-Cada prueba ≥ 3 h en muñeca real. Salidas: coste incremental del escaneo, tiempo de escaneo, pico y suelo de RAM interna. **Objetivo propuesto: ≤ +25 % sobre E0** en modo muñeca (a confirmar con el usuario). Se compila como firmware de prueba en `ota_4` (slot de pruebas): **no se deja flasheado sin avisar**, y se reflashea el normal al terminar.
-
-## 9. Trabajo entre repositorios (al arrancar el desarrollo, no ahora)
-
-- Launcher: línea en `apps.conf` y entrada en `KNOWN[]` (`os_apps.c`).
-- Core: fila en la tabla de repos de `workspace/AGENTS.md`; namespace `pet` en `docs/ARCHITECTURE.md`; si aparece un hallazgo de hardware (WiFi pasivo, consumo), a `docs/` de core y, si cambia cómo se escriben apps, a la plantilla.
-- Este repo: `.github/workflows/build.yml`, `dependencies.lock`, `.devcontainer`, `.vscode`, `.clangd` y `skills-lock.json` que `check_apps.sh` espera. Ejecutar `ESP32Watch-core/tools/check_apps.sh` y dejarlo sin avisos.
-- `main/idf_component.yml`: el BSP está fijado como `^1.0.6` (no 1.0.7, como decía el spec anterior).
-
-## 10. Riesgos técnicos
-
-| Riesgo | Mitigación |
-| --- | --- |
-| RAM interna con WiFi + render + LVGL | radio solo durante el escaneo; búfer lógico pequeño; medir pico en E1 |
-| Binario > 2 MB en slot | medir esqueleto con WiFi primero; ajustar `sdkconfig.defaults` |
-| Consumo del escaneo en muñeca | plan de medición del apartado 8 antes de fijar frecuencias |
-| Standalone: particiones y `launcher_is_available()` | verificar en el primer build; decidir tabla propia |
-| Sin simulador previo | construirlo en fase 0 junto al render |
-| Calidad del arte procedural | hojas de contacto + guía de estilo + puntos de control de aprobación (`STYLEGUIDE.md`) |
+| Riesgo | Estado | Mitigación |
+| --- | --- | --- |
+| Binario > 1,5 MiB | medido: 0,99 MiB con WiFi | config solo-escaneo; vigilar `idf.py size` en cada fase |
+| RAM interna con WiFi + LVGL | estática medida; runtime en R1 | `buffer_lines = 20`, WiFi en PSRAM, init/deinit por escaneo, comprobar retornos |
+| Escanear sin encender la pantalla | resuelto en diseño | `watch_power_screen_off` + `stay_awake` |
+| Consumo del escaneo | sin medir | E0–E2 antes de fijar frecuencias |
+| Fluidez de la escena con LVGL | sin medir | D1; plan B con framebuffer propio sin tocar `pet_render` |
+| Calidad del arte | — | hojas de contacto + guía + puntos de control (`STYLEGUIDE.md`) |
