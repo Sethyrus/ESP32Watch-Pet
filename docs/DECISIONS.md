@@ -45,7 +45,7 @@ Registro de decisiones del proyecto. Criterio general (usuario, 2026-10-17): **p
 | --- | --- |
 | R1 | Navegación: toque = caricia; deslizar arriba = despensa; abajo = estado; BOOT = aceptar; PWR corto = atrás (en la raíz: Launcher en modo app, nada en standalone). |
 | R2 | Noche por defecto 23:00–08:00, ajustable. |
-| R3 | Audio mínimo (señal nueva, caricia, hambre) con ondas generadas en C, silenciable y mudo de noche; es lo último de F2 y se recorta si complica el consumo. |
+| R3 | *(Sustituida por R22.)* Audio mínimo (señal nueva, caricia, hambre) con ondas generadas en C, silenciable y mudo de noche; es lo último de F2 y se recorta si complica el consumo. |
 | R5 | Edad contada desde la instalación (no desde la eclosión); plazos máximos a los 7 días (juvenil) y 14 (adulto). Con una visita al día la eclosión tarda y el plazo de 14 días se iba a 16. |
 | R6 | Doméstico da +1 PC. Sin él, quien se queda en casa no crecía (solo +10/día de visita) y esperaba al plazo. |
 | R7 | El picoteo y la ausencia comen el bocado **más antiguo** y cuentan para la dieta: la dieta depende del entorno y el jugador la sesga. Alternativa descartada: comer siempre doméstico (todo jugador con salidas quedaría Hogareño aunque viva fuera). |
@@ -70,6 +70,17 @@ Motivo (usuario, 2026-10-18): el juego v1 era simple, poco claro y aburrido; nad
 | R19 | **Partida v3 con migración de v2:**<br>- ánimo → diversión;<br>- PC × 5 → XP;<br>- despensa: domésticos → pan, exóticos y urbanos → chuches;<br>- la rama Explorador pasa a Saltarín.<br>Se conserva la mascota del reloj (comprobado con su partida real, `tests/fixtures/watch_v2_*.bin`, anonimizada: clave ficticia y sin tablas de redes). Copia previa de la NVS en `backups/` (fuera de git). | No perder la cría que ya tenía el usuario. |
 | R20 | **Pantalla apagada = ausencia.** El motor solo avanza con la pantalla encendida, así que el ritmo del día lo marcan las reglas de ausencia: comida al 60 %, diversión e higiene al 50 %, con suelos. | Calibrado con los bots, que pasan el día casi siempre con la pantalla apagada, como el reloj. |
 | R21 | **La velocidad del tiempo solo afecta al reloj del juego.** Vive en RAM y vuelve a ×1 al reiniciar. Guardados, batería y diario siguen el RTC, y entre escaneos pasa al menos 1 min real. | Con ×60 los guardados por tiempo multiplicarían las escrituras en NVS. |
+
+## Cariño y estética (2026-10-18, en curso)
+
+Motivo (usuario): la estética parece «de IA» y poco bonita, no hay sonido, las partículas salen siempre en el mismo sitio y la criatura se mueve poco. Orden acordado: primero lo que no depende de la estética (tipografía, sonido, partículas y pan gratis); luego maquetas de 2 o 3 direcciones visuales para elegir; después, con la estética elegida, escena viva y minijuegos rehechos.
+
+| # | Decisión | Por qué |
+| --- | --- | --- |
+| R22 | **Sonido 8 bits generado por código** (`pet_sound`, sustituye a R3): cuadrada, triangular y ruido, 4 voces, 16 kHz mono. Incluye la **voz de la criatura**, que cambia según la especie y la semilla y varía un poco cada vez, efectos de acciones y de juegos. Volumen No/Bajo/Medio/Alto en Ajustes (partida v4). En silencio de noche y mientras duerme. El códec se abre al sonar y se cierra tras 1,5 s de silencio, y antes de apagar la pantalla. | Da personalidad casi gratis. El altavoz ya estaba probado (Launcher, Doom), el amplificador solo está encendido mientras suena y los sonidos se comprueban en el PC (`sim sounds`, `expect_sound` en uisim). |
+| R23 | **Partículas con azar** (`pet_parts_*` en `pet_scene`): posición, velocidad, gravedad, vaivén, tamaño y vida al azar en cada ráfaga. Pompas que suben y explotan, monedas que giran y rebotan, chispas, migas al comer, polvo al pisar, Z al dormir, estrellas al subir de nivel y mareo. | Los efectos fijos se veían sosos (usuario). |
+| R24 | **Tipografía Barlow con tildes y eñes** (la del Launcher), en lugar de Montserrat, que no las trae. Los textos de la interfaz ya van con su ortografía. | Sin tildes la interfaz parecía inacabada. Si se elige una estética pixel, se cambia en un solo punto (`pet_app/fonts/pet_fonts.h`). |
+| R25 | **Pan gratis sin monedas:** si no llega para el plato más barato, el pan no cuesta nada. | Evita el atasco «sin monedas y sin poder jugar» (cansado, malito o de noche). |
 
 | R4 | Valores numéricos de `PET_DESIGN.md` como punto de partida; se calibran con los tests A1–A10 en F1. |
 

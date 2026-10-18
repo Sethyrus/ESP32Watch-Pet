@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 #include "pet_core.h"
+#include "pet_sound.h"
 
 // The game state. Every access goes through pet_lock()/pet_unlock(). Lock order: the LVGL
 // lock (bsp_display_lock) may be held when taking this one, never the other way round.
@@ -32,8 +33,19 @@ bool pet_in_launcher(void);
 extern volatile int g_batt_pct;
 extern volatile bool g_usb;
 
+// pet_audio.c (tools/uisim: SDL). Callable from any task; never blocks. While muted or at
+// volume 0 new sounds are dropped (a sound already playing finishes).
+void pet_audio_init(void);
+void pet_sound(snd_id_t id);
+void pet_sound_pitch(snd_id_t id, int semitones);
+void pet_sound_volume(int level);                              // 0..PET_VOL_MAX
+void pet_sound_mute(bool mute);                                // night or asleep
+void pet_sound_species(int stage, int branch, uint32_t seed);  // the creature's voice
+void pet_sound_off(void);   // before the screen turns off: stop and power the amplifier down
+
 // pet_ui.c
 void pet_ui_init(void);          // LVGL lock held
+void pet_ui_wake(void);          // LVGL lock held; the screen has just turned on
 void pet_ui_tick(void);          // ui_task, LVGL lock NOT held: step, render, swap
 bool pet_ui_back(void);          // LVGL lock held; true when a panel was closed
 void pet_ui_boot_action(void);   // LVGL lock held; BOOT short press

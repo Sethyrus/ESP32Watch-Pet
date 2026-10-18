@@ -9,7 +9,41 @@
 #define PET_SCENE_FLOOR 266                       /* y del suelo */
 #define PET_SCENE_XMAX  (PET_SCENE_W - PET_W * PET_SCENE_SCALE)   /* x maxima de la criatura */
 
-typedef enum { FX_NONE, FX_HEARTS, FX_BUBBLES, FX_SPARKLE, FX_COINS } pet_fx_t;
+/* Efectos: ráfagas de partículas con posición, velocidad, giro, tamaño y vida al azar. */
+typedef enum {
+    FX_NONE,
+    FX_HEARTS,    /* caricia, plato favorito */
+    FX_BUBBLES,   /* baño: pompas por todo el cuerpo que suben y explotan */
+    FX_SPARKLE,   /* caca limpiada: chispas desde el punto tocado */
+    FX_COINS,     /* premio: monedas que saltan, caen y rebotan */
+    FX_DUST,      /* polvo al aterrizar */
+    FX_CRUMBS,    /* migas al comer */
+    FX_ZZZ,       /* una Z que sube (se emite cada poco mientras duerme) */
+    FX_STARS,     /* nivel y evolución: estallido de estrellas */
+    FX_DIZZY,     /* mareo: estrellas girando sobre la cabeza */
+    FX_COUNT
+} pet_fx_t;
+
+#define PET_PARTS_MAX 64
+
+typedef struct {
+    float x, y, vx, vy, ay;      /* px, px/s, px/s² */
+    int16_t age, life;           /* ms; age < 0: aún no ha salido */
+    uint8_t kind, size, wob, ph; /* wob: vaivén lateral en px; ph: fase */
+    uint16_t color;
+} pet_part_t;
+
+typedef struct {
+    pet_part_t p[PET_PARTS_MAX];
+    uint32_t rng;
+} pet_parts_t;
+
+void pet_parts_init(pet_parts_t *ps, uint32_t seed);
+/* Lanza un efecto centrado en (x, y), en coordenadas de la escena. */
+void pet_parts_emit(pet_parts_t *ps, pet_fx_t fx, int x, int y);
+void pet_parts_step(pet_parts_t *ps, uint32_t dt_ms);
+bool pet_parts_active(const pet_parts_t *ps);
+void pet_parts_draw(const pet_parts_t *ps, pet_gfx_t *g);
 
 typedef struct {
     pet_view_t view;
@@ -20,14 +54,13 @@ typedef struct {
     bool       bubble_wish;     /* borde dorado (deseo) o rojo (necesidad) */
     bool       night;
     bool       dark;            /* luz apagada: todo atenuado */
-    pet_fx_t   fx;
-    uint32_t   fx_ms;           /* tiempo desde que empezo el efecto */
-    int        fx_x, fx_y;      /* punto del efecto (destello) */
+    const pet_parts_t *parts;   /* partículas encima de todo (o NULL) */
     uint32_t   t_ms;            /* reloj para animar burbuja y estrellas */
 } pet_scene_t;
 
 void pet_scene_draw(const pet_scene_t *sc, uint16_t *dst);   /* PET_SCENE_W x PET_SCENE_H */
-uint32_t pet_scene_fx_ms(pet_fx_t fx);                       /* duracion del efecto */
+/* Centro aproximado de la cabeza de la criatura (origen de corazones, monedas, Z...). */
+void pet_scene_head(const pet_scene_t *sc, int *x, int *y);
 
 /* Posicion (esquina superior izquierda) de la caca i y su caja de toque. */
 void pet_scene_poop_rect(int i, int *x, int *y, int *w, int *h);

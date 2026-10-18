@@ -346,6 +346,9 @@ void pet_item_effect(pet_item_t item, int *food, int *fun, int *xp)
 
 pet_item_t pet_favorite(const pet_state_t *s) { return (pet_item_t)((s->view_seed >> 12) % PET_MENU_COUNT); }
 
+/* Sin monedas para el plato más barato el pan es gratis: nunca se queda sin poder comer. */
+bool pet_bread_free(const pet_state_t *s) { return s->inv[ITEM_BREAD] == 0 && s->coins < (uint32_t)ITEM_FX[ITEM_BREAD][0]; }
+
 pet_feed_t pet_feed(pet_state_t *s, pet_item_t item, int64_t now_s)
 {
     if (item >= ITEM_COUNT) return FEED_NONE;
@@ -356,6 +359,8 @@ pet_feed_t pet_feed(pet_state_t *s, pet_item_t item, int64_t now_s)
     if (item != ITEM_MEDICINE && s->satiety >= 95 * PET_ONE) return FEED_FULL;
     if (s->inv[item] > 0) {
         s->inv[item]--;
+    } else if (item == ITEM_BREAD && pet_bread_free(s)) {
+        /* gratis */
     } else {
         int price = ITEM_FX[item][0];
         if (price <= 0) return FEED_NONE;
@@ -999,7 +1004,7 @@ void pet_init(pet_state_t *s, const uint8_t key[PET_KEY_LEN], int64_t now_s)
     s->sig_day = day_of(now_s);
     s->night_start_h = 23;
     s->night_end_h = 8;
-    s->sound_on = 1;
+    s->volume = PET_VOL_DEFAULT;
     s->coins = 20;
 }
 

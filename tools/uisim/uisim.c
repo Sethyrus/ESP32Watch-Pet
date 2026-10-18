@@ -94,6 +94,50 @@ void pet_skip_time(int64_t secs) { s_now += secs; }
 bool pet_in_launcher(void) { return true; }
 int64_t esp_timer_get_time(void) { return (int64_t)s_mono * 1000; }
 
+void uisim_log(char level, const char *tag, const char *fmt, ...);
+
+/* ---------- sound: SDL audio in `run`, a log (and expect_sound) in scripts ---------- */
+static snd_t s_snd;
+static SDL_AudioDeviceID s_audio;
+static int s_vol = PET_VOL_DEFAULT;
+static bool s_mute;
+static uint64_t s_heard;   /* bit per snd_id_t played since the last expect_sound */
+static const float VOL_GAIN[PET_VOL_MAX + 1] = { 0.0f, 0.35f, 0.6f, 1.0f };
+
+static void audio_cb(void *user, Uint8 *stream, int len)
+{
+    (void)user;
+    int16_t *out = (int16_t *)stream;
+    const int n = len / 2;
+    snd_render(&s_snd, out, n);
+    for (int i = 0; i < n; i++) out[i] = (int16_t)(out[i] * VOL_GAIN[s_vol]);
+}
+
+void pet_audio_init(void) {}
+void pet_sound_pitch(snd_id_t id, int semitones)
+{
+    if (id >= SND_COUNT || s_mute || s_vol == 0) {
+        return;
+    }
+    s_heard |= 1ull << id;
+    uisim_log('I', "sound", "%s", snd_name(id));
+    if (s_audio) {
+        SDL_LockAudioDevice(s_audio);
+        snd_play_pitch(&s_snd, id, semitones);
+        SDL_UnlockAudioDevice(s_audio);
+    }
+}
+void pet_sound(snd_id_t id) { pet_sound_pitch(id, 0); }
+void pet_sound_volume(int level) { s_vol = level < 0 ? 0 : level > PET_VOL_MAX ? PET_VOL_MAX : level; }
+void pet_sound_mute(bool mute) { s_mute = mute; }
+void pet_sound_species(int stage, int branch, uint32_t seed)
+{
+    if (s_audio) SDL_LockAudioDevice(s_audio);
+    snd_set_species(&s_snd, stage, branch, seed);
+    if (s_audio) SDL_UnlockAudioDevice(s_audio);
+}
+void pet_sound_off(void) {}
+
 bool bsp_display_lock(uint32_t timeout_ms) { (void)timeout_ms; return true; }
 void bsp_display_unlock(void) {}
 
@@ -182,6 +226,8 @@ static void sim_init(uint32_t seed)
 {
     s_seed = seed;
     new_game(seed);
+    snd_init(&s_snd, seed);
+    pet_sound_volume(g_pet.volume);
     lv_init();
     lv_tick_set_cb(tick_cb);
     lv_log_register_print_cb(lv_log_cb);
@@ -545,6 +591,26 @@ static int script_mode(const char *file, const char *outdir)
                 die("cannot write %s", path);
             }
             printf("%s\n", path);
+        } else if (!strcmp(c, "wake")) {
+            bsp_display_lock(0);
+            pet_ui_wake();
+            bsp_display_unlock();
+            frame(FRAME_MS);
+        } else if (!strcmp(c, "expect_sound")) {
+            if (n < 2) {
+                die("expect_sound expects <name>");
+            }
+            int id = -1;
+            for (int k = 0; k < SND_COUNT; k++) {
+                if (!strcmp(snd_name((snd_id_t)k), tok[1])) id = k;
+            }
+            if (id < 0) {
+                die("unknown sound '%s'", tok[1]);
+            }
+            if (!(s_heard >> id & 1)) {
+                die("expect_sound: '%s' has not played since the last check", tok[1]);
+            }
+            s_heard = 0;
         } else if (!strcmp(c, "expect_dirty")) {
             if (s_dirty_count == dirty_mark) {
                 die("expect_dirty: no pet_mark_dirty() since the last check");
@@ -586,6 +652,14 @@ static int interactive_mode(int zoom, uint32_t seed)
         fprintf(stderr, "uisim: SDL_Init: %s\n", SDL_GetError());
         return 1;
     }
+    if (SDL_InitSubSystem(SDL_INIT_AUDIO) == 0) {
+        SDL_AudioSpec want = { .freq = SND_RATE, .format = AUDIO_S16SYS, .channels = 1, .samples = 512, .callback = audio_cb };
+        s_audio = SDL_OpenAudioDevice(NULL, 0, &want, NULL, 0);
+        if (s_audio) SDL_PauseAudioDevice(s_audio, 0);
+    }
+    if (!s_audio) {
+        fprintf(stderr, "uisim: no audio (%s): running silent\n", SDL_GetError());
+    }
     SDL_Window *win = SDL_CreateWindow("uisim", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, W * zoom, H * zoom, 0);
     SDL_Renderer *ren = win ? SDL_CreateRenderer(win, -1, 0) : NULL;
     SDL_Texture *tex = ren ? SDL_CreateTexture(ren, SDL_PIXELFORMAT_RGB565, SDL_TEXTUREACCESS_STREAMING, W, H) : NULL;
@@ -593,7 +667,7 @@ static int interactive_mode(int zoom, uint32_t seed)
         fprintf(stderr, "uisim: SDL: %s\n", SDL_GetError());
         return 1;
     }
-    printf("keys: b=BOOT p/Esc/Backspace=PWR h=+1h d=+1day 1/2/3=x1/x60/x600 s=shot q=quit\n");
+    printf("keys: b=BOOT p/Esc/Backspace=PWR w=wake h=+1h d=+1day 1/2/3=x1/x60/x600 s=shot q=quit\n");
     fflush(stdout);
     uint32_t next = SDL_GetTicks();
     int64_t last_title = -1;
@@ -627,6 +701,7 @@ static int interactive_mode(int zoom, uint32_t seed)
                 }
                 switch (ev.key.keysym.sym) {
                 case SDLK_b: do_boot(); break;
+                case SDLK_w: bsp_display_lock(0); pet_ui_wake(); bsp_display_unlock(); break;
                 case SDLK_p: case SDLK_ESCAPE: case SDLK_BACKSPACE: do_pwr(); break;
                 case SDLK_h: s_now += 3600; break;
                 case SDLK_d: s_now += DAY; break;
@@ -661,6 +736,7 @@ static int interactive_mode(int zoom, uint32_t seed)
             next = SDL_GetTicks(); /* fell behind: do not try to catch up */
         }
     }
+    if (s_audio) SDL_CloseAudioDevice(s_audio);
     SDL_DestroyTexture(tex);
     SDL_DestroyRenderer(ren);
     SDL_DestroyWindow(win);

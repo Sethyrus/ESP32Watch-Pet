@@ -43,7 +43,16 @@ typedef struct {
     int      fill;                     /* 0..1000 */
     uint8_t  weight;
     uint32_t lift_t;
+    /* sucesos para sonidos y efectos (pet_game_take_events) */
+    uint16_t events;
+    int8_t   ev_pad;                   /* tecla de Memoria que acaba de encenderse */
+    uint8_t  combo;                    /* Atrapa: cosas seguidas sin fallar */
 } pet_game_t;
+
+enum {
+    GEV_CATCH = 1 << 0, GEV_STAR = 1 << 1, GEV_ZAP = 1 << 2, GEV_PAD = 1 << 3, GEV_GOOD = 1 << 4,
+    GEV_FAIL = 1 << 5, GEV_TICK = 1 << 6, GEV_LIFTED = 1 << 7, GEV_DROP = 1 << 8, GEV_WIN = 1 << 9
+};
 
 void pet_game_start(pet_game_t *g, pet_game_id_t id, uint32_t seed, const pet_view_t *pet);
 void pet_game_update(pet_game_t *g, uint32_t dt_ms, const pet_input_t *in);
@@ -54,6 +63,7 @@ int  pet_game_seconds_left(const pet_game_t *g);     /* -1 si no hay reloj */
 const char *pet_game_hint(const pet_game_t *g);      /* texto corto para la UI */
 void pet_game_render(const pet_game_t *g, uint16_t *dst);   /* PET_GAME_W x PET_GAME_H */
 const char *pet_game_name(pet_game_id_t id);
+uint16_t pet_game_take_events(pet_game_t *g);          /* GEV_* desde la última llamada */
 
 /* Para los bots de los tests: lo que tocaria un jugador perfecto ahora. */
 bool pet_game_bot_input(const pet_game_t *g, pet_input_t *out);

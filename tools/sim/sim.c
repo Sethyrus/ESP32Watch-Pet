@@ -1,8 +1,10 @@
 /* Simulador PC de Pet: hojas de contacto y comprobaciones automaticas del arte.
- * Uso: sim sheets <dir> [escala] | sim check */
+ * Uso: sim sheets <dir> [escala] | sim check | sim scenes <dir> | sim sounds <dir> */
 #include "pet_render.h"
 #include "pet_scene.h"
 #include "pet_game.h"
+#include "pet_core.h"
+#include "pet_sound.h"
 #include "png.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -274,16 +276,52 @@ static int scenes(const char *dir)
         { "s1_cria_hambre", { .view = { SEED(0, 0, 3, 7), PET_BABY, 0, EXPR_HUNGRY, false, 0, 0, 0, 0, 0, 0, false, 0, 0 },
                               .x = 60, .poops = 2, .bubble = ICON_BREAD, .t_ms = 0 } },
         { "s2_adulto_corona", { .view = { SEED(2, 1, 1, 7), PET_ADULT, 2, EXPR_HAPPY, false, 0, 0, VAR_POLISHED, 0, 0, 0, false, 0, ACC_CROWN },
-                                .x = 140, .bubble = ICON_BALL, .bubble_wish = true, .fx = FX_HEARTS, .fx_ms = 500 } },
+                                .x = 140, .bubble = ICON_BALL, .bubble_wish = true } },
         { "s3_noche", { .view = { SEED(1, 2, 2, 7), PET_JUVENILE, 0, EXPR_SLEEP, false, 0, 0, 0, 0, 0, 2, false, 0, ACC_BEANIE },
                         .x = 80, .night = true, .poops = 1, .bubble = -1 } },
         { "s4_banio", { .view = { SEED(3, 0, 0, 7), PET_ADULT, 3, EXPR_HAPPY, false, 0, 0, 0, 0, 0, 0, false, 0, 0 },
-                        .x = 0, .bubble = -1, .fx = FX_BUBBLES, .fx_ms = 700 } },
+                        .x = 0, .bubble = -1 } },
     };
+    /* efectos: cada escena con su ráfaga, a mitad de recorrido */
+    static const pet_fx_t FX[] = { FX_CRUMBS, FX_HEARTS, FX_ZZZ, FX_BUBBLES };
+    static const int FX_MS[] = { 250, 500, 900, 700 };
+    static pet_parts_t parts;
     for (size_t i = 0; i < sizeof S / sizeof S[0]; i++) {
+        int hx, hy;
+        pet_scene_head(&S[i].sc, &hx, &hy);
+        pet_parts_init(&parts, 7 + (uint32_t)i);
+        pet_parts_emit(&parts, FX[i], hx, hy);
+        for (int t = 0; t < FX_MS[i]; t += 33) pet_parts_step(&parts, 33);
+        S[i].sc.parts = &parts;
         pet_scene_draw(&S[i].sc, fb);
         snprintf(p, sizeof p, "%s/%s.png", dir, S[i].name);
         rc |= write565(p, fb, PET_SCENE_W, PET_SCENE_H);
+    }
+    /* hoja de efectos: cada uno en tres instantes (fila = efecto) */
+    {
+        enum { CW = PET_SCENE_W / 2, CH = PET_SCENE_H / 2 };
+        static uint16_t sheet[(FX_COUNT - 1) * CH * 3 * CW];
+        const int SW = 3 * CW;
+        pet_scene_t base = { .view = { SEED(1, 1, 1, 7), PET_JUVENILE, 0, EXPR_HAPPY, false, 0, 0, 0, 0, 0, 0, false, 0, 0 },
+                             .x = 80, .bubble = -1 };
+        for (int fx = 1; fx < FX_COUNT; fx++) {
+            int hx, hy;
+            pet_scene_head(&base, &hx, &hy);
+            pet_parts_init(&parts, 100 + (uint32_t)fx);
+            pet_parts_emit(&parts, (pet_fx_t)fx, fx == FX_SPARKLE ? 60 : hx, fx == FX_SPARKLE ? 250 : hy);
+            int t = 0;
+            for (int k = 0; k < 3; k++) {
+                const int until = (k + 1) * (fx == FX_ZZZ ? 600 : 300);
+                for (; t < until; t += 33) pet_parts_step(&parts, 33);
+                base.parts = &parts;
+                pet_scene_draw(&base, fb);
+                for (int y = 0; y < CH; y++)   /* a media escala */
+                    for (int x = 0; x < CW; x++)
+                        sheet[((fx - 1) * CH + y) * SW + k * CW + x] = fb[(y * 2) * PET_SCENE_W + x * 2];
+            }
+        }
+        snprintf(p, sizeof p, "%s/s5_efectos.png", dir);
+        rc |= write565(p, sheet, SW, (FX_COUNT - 1) * CH);
     }
     /* minijuegos con el bot perfecto, en varios instantes */
     static uint16_t gb[PET_GAME_W * PET_GAME_H];
@@ -313,8 +351,72 @@ static int scenes(const char *dir)
     return rc;
 }
 
+/* ---------- sonidos: un WAV por efecto (y la voz de cada especie) ---------- */
+static void put16(FILE *f, unsigned v) { fputc((int)(v & 255), f); fputc((int)(v >> 8 & 255), f); }
+static void put32(FILE *f, unsigned v) { put16(f, v & 0xffff); put16(f, v >> 16); }
+
+static int wav_write(const char *path, const int16_t *s, int n)
+{
+    FILE *f = fopen(path, "wb");
+    if (!f) { perror(path); return 1; }
+    fwrite("RIFF", 1, 4, f); put32(f, 36 + (unsigned)n * 2); fwrite("WAVEfmt ", 1, 8, f);
+    put32(f, 16); put16(f, 1); put16(f, 1); put32(f, SND_RATE); put32(f, SND_RATE * 2); put16(f, 2); put16(f, 16);
+    fwrite("data", 1, 4, f); put32(f, (unsigned)n * 2);
+    for (int i = 0; i < n; i++) put16(f, (uint16_t)s[i]);
+    return fclose(f) != 0;
+}
+
+/* Reproduce id (varias veces si rep > 1, con un silencio entre medias) y lo guarda. */
+static int sound_file(const char *dir, const char *name, snd_t *s, snd_id_t id, int rep)
+{
+    enum { MAX = 8 * SND_RATE };
+    static int16_t buf[MAX];
+    int n = 0;
+    for (int r = 0; r < rep; r++) {
+        snd_play(s, id);
+        while (snd_busy(s) && n + 256 <= MAX) { snd_render(s, buf + n, 256); n += 256; }
+        for (int k = 0; k < SND_RATE / 4 && n < MAX; k++) buf[n++] = 0;
+    }
+    char p[512];
+    snprintf(p, sizeof p, "%s/%s.wav", dir, name);
+    return wav_write(p, buf, n);
+}
+
+static int sounds(const char *dir)
+{
+    int rc = 0;
+    snd_t s;
+    snd_init(&s, 2026);
+    for (int id = 0; id < SND_COUNT; id++)   /* voz con la cría; los efectos de voz, tres veces seguidas */
+        rc |= sound_file(dir, snd_name((snd_id_t)id), &s, (snd_id_t)id, id <= SND_V_DIZZY ? 3 : 1);
+    static const char *const SP[] = { "juvenil", "hogareno", "saltarin", "sabio", "forzudo" };
+    for (int k = 0; k < 5; k++) {
+        snd_set_species(&s, k == 0 ? PET_JUVENILE : PET_ADULT, k == 0 ? BRANCH_NONE : k, 2026);
+        char n[64];
+        snprintf(n, sizeof n, "voz_%s", SP[k]);
+        rc |= sound_file(dir, n, &s, SND_V_HAPPY, 3);
+    }
+    /* todos seguidos en un solo fichero, para escucharlos de una vez */
+    enum { ALL = 60 * SND_RATE };
+    int16_t *all = malloc(ALL * sizeof(int16_t));
+    int n = 0;
+    snd_set_species(&s, PET_BABY, BRANCH_NONE, 2026);
+    for (int id = 0; all && id < SND_COUNT; id++) {
+        snd_play(&s, (snd_id_t)id);
+        while (snd_busy(&s) && n + 256 <= ALL) { snd_render(&s, all + n, 256); n += 256; }
+        for (int k = 0; k < SND_RATE / 2 && n < ALL; k++) all[n++] = 0;
+    }
+    char p[512];
+    snprintf(p, sizeof p, "%s/todos.wav", dir);
+    if (all) rc |= wav_write(p, all, n);
+    free(all);
+    if (!rc) printf("%d sonidos en %s (todos seguidos: todos.wav)\n", SND_COUNT + 5, dir);
+    return rc;
+}
+
 int main(int argc, char **argv)
 {
+    if (argc >= 3 && !strcmp(argv[1], "sounds")) return sounds(argv[2]);
     if (argc >= 3 && !strcmp(argv[1], "scenes")) return scenes(argv[2]);
     if (argc >= 2 && !strcmp(argv[1], "check")) return check();
     if (argc >= 3 && !strcmp(argv[1], "sheets")) {

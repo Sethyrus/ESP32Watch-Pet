@@ -1,5 +1,6 @@
 // ESP32Watch Pet: board init, tasks and power. Game rules live in pet_core, drawing in
-// pet_render, screens in pet_ui.c, radio in pet_radio.c and saves in pet_store.c.
+// pet_render, screens in pet_ui.c, radio in pet_radio.c, saves in pet_store.c and sound in
+// pet_audio.c.
 //
 // Tasks (docs/PET_TECH.md, section 6):
 //   ui_task     step + render + LVGL swap while the screen is on
@@ -338,6 +339,7 @@ static void system_task(void *arg)
             s_force_save = true;
             maybe_save();
             s_screen_on = false;
+            pet_sound_off();
             ESP_LOGI(TAG, "screen off");
             // Must not hold the LVGL lock: watch_power stops LVGL and takes it itself.
             const watch_wake_t why = watch_power_screen_off(0, stay_awake);
@@ -346,6 +348,7 @@ static void system_task(void *arg)
             watch_boot_debouncer_init(&boot, 0, 0); // the waking press is not an action
             if (bsp_display_lock(1000)) {
                 lv_display_trigger_activity(NULL);
+                pet_ui_wake();
                 bsp_display_unlock();
             }
         }
@@ -389,7 +392,9 @@ esp_err_t pet_app_start(void)
         ESP_LOGW(TAG, "RTC lost its time: pet re-anchored");
     }
     read_battery(rtc_now());
-    s_last_save_s = rtc_now(); // the save just loaded (or forced for a new game) is the last one
+    s_last_save_s = rtc_now();
+    pet_audio_init();
+    pet_sound_volume(g_pet.volume); // the save just loaded (or forced for a new game) is the last one
 
     watch_display_config_t display = WATCH_DISPLAY_CONFIG_DEFAULT();
     display.brightness = brightness;

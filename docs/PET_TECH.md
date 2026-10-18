@@ -1,6 +1,6 @@
 # Pet Tech: especificación técnica
 
-Estado: **juego v2** (2026-10-18; ver `DECISIONS.md`, R16–R21). Producto en `PET_DESIGN.md`; decisiones en `DECISIONS.md`. Lo verificado el 2026-10-17 (código de core, compilaciones de prueba) se marca **[verificado]**; lo que solo puede medirse en el reloj, **[medir en F2]**.
+Estado: **juego v2** (2026-10-18; ver `DECISIONS.md`, R16–R25). Producto en `PET_DESIGN.md`; decisiones en `DECISIONS.md`. Lo verificado el 2026-10-17 (código de core, compilaciones de prueba) se marca **[verificado]**; lo que solo puede medirse en el reloj, **[medir en F2]**.
 
 ## 1. Estructura
 
@@ -10,7 +10,8 @@ ESP32Watch-Pet/
 │   ├── pet_core/      C99 puro: estado, reglas, tiempo, serialización. Sin ESP-IDF.
 │   ├── pet_render/    C99 puro: paleta, máscaras, cara, animación, iconos (pet_gfx), escena (pet_scene).
 │   ├── pet_game/      C99 puro: minijuegos deterministas (lógica + dibujo en RGB565).
-│   └── pet_app/       ESP-IDF: UI (LVGL), radio, persistencia, energía (usa watch_board).
+│   ├── pet_sound/     C99 puro: sintetizador de efectos y voz de la criatura (16 kHz mono).
+│   └── pet_app/       ESP-IDF: UI (LVGL), radio, persistencia, energía, altavoz (usa watch_board).
 ├── tools/
 │   ├── sim/           Hojas de contacto, escenas y fotogramas de juego en PNG.
 │   ├── uisim/         La UI LVGL real en el PC (SDL2 o por guion con capturas PNG).
@@ -19,13 +20,17 @@ ESP32Watch-Pet/
 └── docs/
 ```
 
-**Escena y juegos (v2):** `pet_scene` y `pet_game` dibujan en un búfer RGB565 de 400×280 en PSRAM (doble búfer) que la UI enseña con un `lv_image`; la escena se redibuja solo cuando cambia algo. `tools/uisim` compila `pet_ui*.c` sin tocarlo con unos shims (`bsp/esp-bsp.h`, `esp_heap_caps.h`, `esp_log.h`) e implementa `pet_priv.h`. Imagen del firmware: 1,14 MiB (cabe en `factory`).
+**Escena y juegos (v2):** `pet_scene` y `pet_game` dibujan en un búfer RGB565 de 400×280 en PSRAM (doble búfer) que la UI enseña con un `lv_image`; la escena se redibuja solo cuando cambia algo. `tools/uisim` compila `pet_ui*.c` sin tocarlo con unos shims (`bsp/esp-bsp.h`, `esp_heap_caps.h`, `esp_log.h`) e implementa `pet_priv.h`. Imagen del firmware: 1,15 MiB (cabe en `factory`).
+
+**Partículas (R23):** `pet_parts_t` (64 partículas, en `pet_scene`) vive en `ui_task`. Las peticiones de efectos llegan por una cola pequeña protegida con `pet_lock`, porque las piden tanto los callbacks de LVGL como `ui_task`. Mientras quedan partículas vivas, la escena se redibuja en cada tic (40 ms).
+
+**Sonido (R22):** `pet_audio.c` tiene una tarea con una cola de peticiones (`pet_sound()` no bloquea nunca). En el primer sonido abre el códec (`bsp_audio_codec_speaker_init` una vez, luego `esp_codec_dev_open` a 16 kHz mono) y escribe bloques de 256 muestras. Tras 1,5 s de silencio lo cierra, lo que también apaga el amplificador. `system_task` llama a `pet_sound_off()` antes de apagar la pantalla. Volumen del códec por nivel: 0/62/76/90. `tools/uisim` lo reproduce con SDL y `tools/sim/build/sim sounds <dir>` exporta un WAV por efecto.
 
 `pet_core`, `pet_render` y `pet_game` no incluyen cabeceras de ESP-IDF, LVGL ni SDL: reciben el tiempo, el azar y las entradas como parámetros, de modo que **el mismo código compila para el simulador, los tests y el firmware** (patrón de pocket-tank y de `ESP32Watch-Fluid/components/fluid_engine` + `tools/host_bench`).
 
 ### API de `pet_core` (real: `components/pet_core/include/pet_core.h`)
 
-Resumen; la cabecera es la referencia. Tiempo en segundos de hora local; los eventos con subsegundos reciben además un reloj monotónico en ms. `pet_view()` rellena el `pet_view_t` de `pet_render` y devuelve la animación recomendada (`pet_core/pet_view.c` es el único punto que incluye `pet_render.h`). `pet_step` trata un hueco > 5 min como ausencia (`pet_catch_up`); la app **solo** llama a `pet_step` con la pantalla encendida y a `pet_ingest_scan` en segundo plano. Partida v3, 653 B: `pet_save`/`pet_load`/`pet_load_ab` (A/B con CRC; migración v1/v2→v3 probada, también con la partida real del reloj).
+Resumen; la cabecera es la referencia. Tiempo en segundos de hora local; los eventos con subsegundos reciben además un reloj monotónico en ms. `pet_view()` rellena el `pet_view_t` de `pet_render` y devuelve la animación recomendada (`pet_core/pet_view.c` es el único punto que incluye `pet_render.h`). `pet_step` trata un hueco > 5 min como ausencia (`pet_catch_up`); la app **solo** llama a `pet_step` con la pantalla encendida y a `pet_ingest_scan` en segundo plano. Partida v4, 654 B (v4 añade el volumen): `pet_save`/`pet_load`/`pet_load_ab` (A/B con CRC; migraciones v1/v2→v3 y v3→v4 probadas, también con la partida real del reloj).
 
 Boceto original:
 

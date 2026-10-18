@@ -61,6 +61,13 @@ void pet_game_start(pet_game_t *g, pet_game_id_t id, uint32_t seed, const pet_vi
 bool pet_game_over(const pet_game_t *g) { return g->over; }
 int  pet_game_score(const pet_game_t *g) { return g->score; }
 
+uint16_t pet_game_take_events(pet_game_t *g)
+{
+    const uint16_t e = g->events;
+    g->events = 0;
+    return e;
+}
+
 int pet_game_perf(const pet_game_t *g)
 {
     int p;
@@ -83,16 +90,16 @@ int pet_game_seconds_left(const pet_game_t *g)
 const char *pet_game_hint(const pet_game_t *g)
 {
     switch (g->id) {
-    case GAME_CATCH: return "Arrastra: coge comida y estrellas, evita los bichos";
+    case GAME_CATCH: return "Arrastra: coge comida y estrellas, evita los rayos";
     case GAME_MEMORY:
         switch (g->phase) {
         case MEM_INPUT: return "Tu turno: repite la secuencia";
-        case MEM_FAIL:  return "Fallo!";
-        case MEM_WIN:   return "Perfecto! Todas las rondas";
-        case MEM_GOOD:  return "Bien! Otra mas larga";
+        case MEM_FAIL:  return "¡Fallo!";
+        case MEM_WIN:   return "¡Perfecto! Todas las rondas";
+        case MEM_GOOD:  return "¡Bien! Otra más larga";
         default:        return "Mira la secuencia";
         }
-    default: return "Toca muy rapido para levantar la pesa";
+    default: return "Toca muy rápido para levantar la pesa";
     }
 }
 
@@ -132,13 +139,18 @@ static void catch_update(pet_game_t *g, uint32_t dt, const pet_input_t *in)
                 g->score = g->score > 2 ? g->score - 2 : 0;
                 g->stun_until = t + 700;
                 g->flash = -1;
+                g->combo = 0;
+                g->events |= GEV_ZAP;
             } else {
                 g->score += d->kind == DROP_STAR ? 3 : 1;
                 g->flash = 1;
+                if (g->combo < 255) g->combo++;
+                g->events |= d->kind == DROP_STAR ? GEV_STAR : GEV_CATCH;
             }
             g->flash_until = t + 350;
             d->kind = DROP_FREE;
         } else if (d->y > PET_GAME_H + 20) {
+            if (d->kind != DROP_SPIKY) g->combo = 0;   /* se le escapó */
             d->kind = DROP_FREE;
         }
     }
@@ -165,7 +177,12 @@ static void memory_update(pet_game_t *g, const pet_input_t *in, bool tap)
     case MEM_SHOW: {
         uint32_t step = e / MEM_STEP_MS;
         if (step >= g->len) { mem_phase(g, MEM_INPUT); g->pos = 0; g->lit = -1; break; }
-        g->lit = (e % MEM_STEP_MS) < MEM_ON_MS ? (int8_t)g->seq[step] : -1;
+        const int8_t lit = (e % MEM_STEP_MS) < MEM_ON_MS ? (int8_t)g->seq[step] : -1;
+        if (lit >= 0 && g->lit < 0) {   /* entre tecla y tecla hay un hueco apagado */
+            g->events |= GEV_PAD;
+            g->ev_pad = lit;
+        }
+        g->lit = lit;
         break;
     }
     case MEM_INPUT: {
@@ -175,14 +192,17 @@ static void memory_update(pet_game_t *g, const pet_input_t *in, bool tap)
             g->lit = (int8_t)p;
             g->lit_until = g->t_ms + 220;
             g->phase_t = g->t_ms;                     /* reinicia la espera */
-            if (p != g->seq[g->pos]) { mem_phase(g, MEM_FAIL); break; }
+            if (p != g->seq[g->pos]) { mem_phase(g, MEM_FAIL); g->events |= GEV_FAIL; break; }
+            g->events |= GEV_PAD;
+            g->ev_pad = (int8_t)p;
             if (++g->pos == g->len) {
                 g->score++;
-                if (g->score >= MEM_ROUNDS) mem_phase(g, MEM_WIN);
-                else { g->len++; mem_phase(g, MEM_GOOD); }
+                if (g->score >= MEM_ROUNDS) { mem_phase(g, MEM_WIN); g->events |= GEV_WIN; }
+                else { g->len++; mem_phase(g, MEM_GOOD); g->events |= GEV_GOOD; }
             }
         } else if (e >= MEM_WAIT_MS) {
             mem_phase(g, MEM_FAIL);
+            g->events |= GEV_FAIL;
         }
         break;
     }
@@ -205,12 +225,17 @@ static void lift_update(pet_game_t *g, uint32_t dt, bool tap)
         g->lift_t += dt;
         int decay = (250 + 120 * g->weight) * (int)dt / 1000;
         g->fill = g->fill > decay ? g->fill - decay : 0;
-        if (tap) g->fill = g->fill + LIFT_TAP > 1000 ? 1000 : g->fill + LIFT_TAP;
+        if (tap) {
+            g->fill = g->fill + LIFT_TAP > 1000 ? 1000 : g->fill + LIFT_TAP;
+            g->events |= GEV_TICK;
+        }
         if (g->fill >= 1000) {
             g->score++;
             mem_phase(g, g->score >= LIFT_WEIGHTS ? LIFT_WIN : LIFT_GOOD);
+            g->events |= g->score >= LIFT_WEIGHTS ? GEV_WIN : GEV_LIFTED;
         } else if (g->lift_t >= LIFT_TRY_MS) {
             mem_phase(g, LIFT_FAIL);
+            g->events |= GEV_DROP;
         }
         break;
     }

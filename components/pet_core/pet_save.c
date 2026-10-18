@@ -3,7 +3,8 @@
  * de los de la anterior y una carga mas corta se completa con valores por defecto.
  * v1/v2 son el diseno v1 (despensa WiFi); al cargarlas se migran a v3 (R16):
  * animo -> diversion, PC -> XP, despensa -> inventario. v3 sigue escribiendo los
- * huecos de v1 (con la despensa sacada del inventario) para no romper el formato. */
+ * huecos de v1 (con la despensa sacada del inventario) para no romper el formato.
+ * v4 añade el volumen (0-3); el byte de sonido sí/no de v2 queda como hueco. */
 #include "pet_core.h"
 #include <string.h>
 
@@ -89,7 +90,7 @@ static void put_v1(wr_t *x, const pet_state_t *s, int version)
 
 static void put_v2(wr_t *x, const pet_state_t *s)
 {
-    w(x, s->night_start_h, 1); w(x, s->night_end_h, 1); w(x, s->sound_on, 1);
+    w(x, s->night_start_h, 1); w(x, s->night_end_h, 1); w(x, s->volume > 0, 1);   /* v2: sonido sí/no */
     w(x, s->total_scans, 4);
 }
 
@@ -110,6 +111,8 @@ static void put_v3(wr_t *x, const pet_state_t *s)
     for (int i = 0; i < GAME_COUNT; i++) { w(x, s->games[i], 2); w(x, s->best[i], 2); }
     w(x, s->generation, 1); w(x, s->album, 2); w(x, s->tasted, 1);
 }
+
+static void put_v4(wr_t *x, const pet_state_t *s) { w(x, s->volume, 1); }
 
 static uint32_t t32(rd_t *x) { return (uint32_t)r(x, 4); }
 
@@ -139,7 +142,7 @@ static void get_v1(rd_t *x, pet_state_t *s, legacy_t *lg)
 
 static void get_v2(rd_t *x, pet_state_t *s)
 {
-    s->night_start_h = (uint8_t)r(x, 1); s->night_end_h = (uint8_t)r(x, 1); s->sound_on = (uint8_t)r(x, 1);
+    s->night_start_h = (uint8_t)r(x, 1); s->night_end_h = (uint8_t)r(x, 1); r(x, 1);   /* sonido sí/no: v4 lo sustituye por volume */
     s->total_scans = t32(x);
 }
 
@@ -160,6 +163,8 @@ static void get_v3(rd_t *x, pet_state_t *s)
     for (int i = 0; i < GAME_COUNT; i++) { s->games[i] = (uint16_t)r(x, 2); s->best[i] = (uint16_t)r(x, 2); }
     s->generation = (uint8_t)r(x, 1); s->album = (uint16_t)r(x, 2); s->tasted = (uint8_t)r(x, 1);
 }
+
+static void get_v4(rd_t *x, pet_state_t *s) { s->volume = (uint8_t)r(x, 1); }
 
 static uint8_t level_for(uint32_t xp)
 {
@@ -195,6 +200,7 @@ size_t pet_save_version(const pet_state_t *s, uint32_t seq, int version, uint8_t
     put_v1(&x, s, version);
     if (version >= 2) put_v2(&x, s);
     if (version >= 3) put_v3(&x, s);
+    if (version >= 4) put_v4(&x, s);
     if (!x.ok) return 0;
     size_t len = x.pos - HDR;
     wr_t h = { buf, 0, HDR, true };
@@ -218,7 +224,7 @@ static bool valid(const pet_state_t *s)
     if (s->night_start_h > 23 || s->night_end_h > 23) return false;
     if (s->trait_curiosity > 9 || s->trait_calm > 9 || s->trait_glutton > 9) return false;
     if (s->level < 1 || s->level > 99 || s->poops > PET_POOP_MAX || s->acc_worn >= ACC_COUNT) return false;
-    if (s->wish_kind >= WISH_COUNT || s->sick > 1) return false;
+    if (s->wish_kind >= WISH_COUNT || s->sick > 1 || s->volume > PET_VOL_MAX) return false;
     return s->rng != 0;
 }
 
@@ -237,13 +243,14 @@ pet_load_t pet_load(pet_state_t *s, const uint8_t *buf, size_t len, uint32_t *se
     legacy_t lg;
     memset(&t, 0, sizeof(t));
     memset(&lg, 0, sizeof(lg));
-    t.night_start_h = 23; t.night_end_h = 8; t.sound_on = 1;       /* valores por defecto de campos nuevos */
+    t.night_start_h = 23; t.night_end_h = 8; t.volume = PET_VOL_DEFAULT;       /* valores por defecto de campos nuevos */
     t.level = 1;
     rd_t x = { buf + HDR, 0, plen, true };
     get_v1(&x, &t, &lg);
     if (ver >= 2) get_v2(&x, &t);
     if (ver >= 3) get_v3(&x, &t);
     else migrate(&t, &lg);
+    if (ver >= 4) get_v4(&x, &t);
     if (!x.ok || lg.pantry_n > V1_PANTRY || !valid(&t)) return PET_LOAD_BAD;
     t.started = true;
     *s = t;

@@ -1,8 +1,10 @@
 # Recorrido de la interfaz v2: huevo, nacimiento, necesidades, cada panel y los tres juegos.
 # Bandeja (centros): Comer 49, Jugar 127, Asear 205, Dormir 283, Mas 361; y = 422.
 # Escena en (5,106): caca 0 en (41,356), caca 1 en (369,356).
+# expect_sound comprueba que la acción anterior ha sonado.
 shot 00-egg
 run 130
+expect_sound crack
 shot 01-hatched
 set satiety 20
 set poops 2
@@ -13,12 +15,15 @@ tap 49 422
 wait 300
 shot 03-food
 tap 205 95
+expect_sound eat
 wait 600
 shot 04-eating
 tap 41 356
+expect_sound clean
 wait 300
 shot 05-poop-cleaned
 tap 205 422
+expect_sound wash
 wait 700
 shot 06-wash
 set fun 10
@@ -53,6 +58,7 @@ tap 200 250
 tap 200 250
 tap 200 250
 tap 200 250
+expect_sound tick
 wait 100
 shot 12-lift
 pwr
@@ -87,6 +93,9 @@ pwr
 wait 200
 tap 205 295
 wait 300
+tap 322 236
+expect_sound coin
+wait 300
 shot 18-settings
 pwr
 pwr
@@ -102,6 +111,8 @@ set variant 1
 set acc_worn 6
 wait 600
 shot 20-adult-crown
+wake
+expect_sound v_hello
 clock 23:30
 wait 600
 shot 21-night

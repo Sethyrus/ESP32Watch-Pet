@@ -70,6 +70,7 @@ Monedas (●). Se empieza con 20.
 
 - **Plato favorito** (uno de los cuatro, fijado por la semilla): +10 de diversión y +2 XP extra, con cara de amor. Se descubre al probarlo y queda en el álbum.
 - Con comida ≥ 95 no quiere comer («Está lleno»). De noche duerme y no come.
+- **Pan gratis:** sin monedas para el plato más barato, el pan no cuesta nada (R25). Así nunca se queda sin poder comer.
 
 ## 5. Minijuegos
 
@@ -157,6 +158,13 @@ El WiFi pasa de ser la comida a ser **exploración opcional**. Mientras la app e
 - **Tocar la burbuja** = atajo a lo que pide.
 - Reacciones a la carga USB (amor) y a la batería baja, como v1.
 - **Siesta:** la criatura duerme 30 min, la energía sube +40 y se puede despertar tocándola.
+- **Cabeza o barriga:** tocar la cabeza le da una caricia (corazones); tocar la barriga, cosquillas (se ríe).
+- **Saludo:** al encender la pantalla, si está despierta, salta y saluda.
+- **Partículas con azar (R23):** cada ráfaga sale distinta (posición, velocidad, tamaño, vida). Corazones, pompas que suben y explotan, monedas que giran y rebotan, chispas, migas al comer, polvo al pisar, Z al dormir, estrellas al subir de nivel y mareo.
+
+## 9b. Sonido (R22)
+
+Efectos de 8 bits generados por código, con la **voz de la criatura**: gorjeos que dependen de la especie (la cría es aguda; el Forzudo, grave; el Sabio, suave) y varían un poco cada vez. Suena al saludar, al pedir algo, con caricias, cosquillas, mareo, sueño o malito. También en las acciones (comer, cacas, baño, monedas, compra, medicina, nivel, evolución, deseo cumplido) y en los juegos: en Atrapa el tono sube con la racha, en Memoria cada tecla tiene su nota y en Pesas el tono sube con la barra. Volumen en Ajustes: No, Bajo, Medio o Alto (por defecto Medio). En silencio de noche y mientras duerme; los menús no suenan.
 
 ## 10. Interfaz
 
@@ -174,7 +182,7 @@ El WiFi pasa de ser la comida a ser **exploración opcional**. Mientras la app e
 └──────────────────────────────┘
 ```
 
-- **Más:** Estado (necesidades con números, edad, atributos, pistas de evolución), Tienda, Armario, Álbum y Ajustes (noche, velocidad del tiempo de prueba, reiniciar).
+- **Más:** Estado (necesidades con números, edad, atributos, pistas de evolución), Tienda, Armario, Álbum y Ajustes (noche, sonido, velocidad del tiempo de prueba, reiniciar).
 - **Gestos:** deslizar hacia arriba abre Comer y hacia abajo, Estado.
 - **Botones:** BOOT abre Comer (o «Otra vez» en un juego). PWR vuelve atrás: desde la raíz, al Launcher o, en standalone, apaga la pantalla.
 - Avisos y recompensas en un rótulo sobre la escena («+8 ●», «¡Nivel 4!», «Ha evolucionado»).

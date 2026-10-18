@@ -53,7 +53,9 @@ Orden:
 | 3 | Arte: adultos Sabio y Forzudo, accesorios, iconos, escena (`pet_gfx`, `pet_scene`) | **Hecho.** Hojas en `make -C tools/sim sheets` y `build/sim scenes`. |
 | 4 | Interfaz v2 y simulador `tools/uisim` | **Hecho.** Recorrido completo en `make -C tools/uisim shots`. |
 | 5 | En el reloj | **Instalado en `ota_5`** el 2026-10-18. Arranca, migra la partida real (pasa a juvenil, nivel 4), escanea y guarda. **Pendiente:** prueba de sensación del usuario: tacto de los juegos, fluidez y claridad. |
-| 6 | Siguiente tanda | Sonido (R3), fondos de escena, más accesorios y juegos, IMU en Atrapa (pide apagar `imu_service` en core), standalone en `factory`. |
+| 6 | Cariño, primera parte (R22–R25) | **Hecho:** tipografía con tildes, sonido con volumen y voz de la criatura, partículas con azar, pan gratis y saludo al encender. Instalado en `ota_5`. |
+| 7 | Estética | 2 o 3 direcciones visuales en maquetas para que el usuario elija; después, aplicarla a la interfaz, la escena y los juegos. |
+| 8 | Escena viva y minijuegos | Que mire al dedo, actividades según el entrenamiento, animación elástica; Pesas de precisión, Memoria con baile, Atrapa pulido; dificultad por nivel y reto diario. Más adelante: IMU en Atrapa (pide apagar `imu_service` en core) y standalone en `factory`. |
 
 ## Fuera del MVP
 

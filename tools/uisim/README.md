@@ -1,7 +1,7 @@
 # uisim: PC simulator of the real UI
 
-Builds the firmware's LVGL UI (`components/pet_app/pet_ui*.c`, unchanged) plus `pet_core` and
-`pet_render` for macOS. It talks to the UI only through `pet_app/pet_priv.h`, and covers the ESP-IDF
+Builds the firmware's LVGL UI (`components/pet_app/pet_ui*.c` and its fonts, unchanged) plus `pet_core`,
+`pet_render`, `pet_game` and `pet_sound` for macOS. It talks to the UI only through `pet_app/pet_priv.h`, and covers the ESP-IDF
 headers with `shim/` (`bsp/esp-bsp.h`, `esp_heap_caps.h`, `esp_log.h`, `esp_err.h`, `esp_timer.h`).
 You can check screens with headless screenshots, or play in a window, without flashing the watch.
 
@@ -45,10 +45,19 @@ One command per line; `#` starts a comment. On an error it reports `file:line` a
 | `set <field> <value>` | sets a `pet_state_t` field; stats (satiety, energy, mood) in points. The field table is at the top of `uisim.c` |
 | `shot <name>` | writes `<outdir>/<name>.png` and prints its path |
 | `expect_dirty` | fails unless `pet_mark_dirty()` was called since the last check |
+| `expect_sound <name>` | fails unless that sound (`snd_name()`, e.g. `eat`, `v_hello`) played since the last check; clears the list |
+| `wake` | `pet_ui_wake()`, as when the screen turns on |
 
 Screenshots paint the area outside a 100 px rounded rectangle grey (#303030), so you can see content
 that the screen corners would clip. `UISIM_CORNERS=0` turns this off.
 
 ## Interactive (`uisim run [-z 2] [seed]`)
-The mouse is the touch screen. `b` = BOOT, `p`/Esc/Backspace = PWR, `h` = +1 h, `d` = +1 day,
+The mouse is the touch screen, and the sounds play through the computer's speakers. `b` = BOOT,
+`p`/Esc/Backspace = PWR, `w` = screen wake (greeting), `h` = +1 h, `d` = +1 day,
 `1`/`2`/`3` = speed x1/x60/x600, `s` = screenshot to `tools/uisim/out/shot-N.png`, `q` = quit.
+
+## Visual mockups (`make -C tools/uisim mock`)
+`mock/mock.c` draws the candidate visual directions at real size with the same pieces as the
+firmware (LVGL, `pet_render`, fonts converted with `lv_font_conv`), into `out/mock/*.png` plus
+`out/mock/comparativa.png`. The candidate fonts in `mock/fonts` are Google Fonts under the SIL OFL 1.1:
+Pixelify Sans, Jersey 10 and 15, Silkscreen, Barlow Condensed and Fredoka.

@@ -79,7 +79,7 @@ typedef struct {
     pet_fam_t familiar[PET_FAM_MAX], recent[PET_FAM_MAX];
     uint8_t  familiar_n, recent_n;
     uint8_t  night_start_h, night_end_h;
-    uint8_t  sound_on;
+    uint8_t  volume;          /* 0 off, 1 low, 2 medium, 3 high */
     uint32_t total_scans;
     /* v3 */
     uint32_t coins, xp;
@@ -142,6 +142,7 @@ int        pet_item_price(pet_item_t item);                  /* 0 = no se vende 
 /* Efecto de un plato: comida, diversion, xp (sin favorito ni malito). */
 void       pet_item_effect(pet_item_t item, int *food, int *fun, int *xp);
 pet_item_t pet_favorite(const pet_state_t *s);
+bool pet_bread_free(const pet_state_t *s); // no coins for the cheapest dish: bread is free
 /* Usa el inventario o, si no hay, compra (si se vende y hay monedas). */
 pet_feed_t pet_feed(pet_state_t *s, pet_item_t item, int64_t now_s);
 
@@ -205,8 +206,10 @@ int64_t     pet_next_scan_s(const pet_state_t *s, int64_t now_s, bool desk, int 
 pet_anim_t  pet_view(const pet_state_t *s, int64_t now_s, uint32_t mono_ms, pet_view_t *out);
 
 /* ---- persistencia ---- */
-#define PET_SAVE_VERSION 3
+#define PET_SAVE_VERSION 4
 #define PET_SAVE_MAX     1024
+#define PET_VOL_MAX      3
+#define PET_VOL_DEFAULT  2
 typedef enum { PET_LOAD_OK, PET_LOAD_BAD, PET_LOAD_NEWER } pet_load_t;
 /* Serializa en buf (cabecera + carga). version: PET_SAVE_VERSION (anteriores solo para tests de migracion). */
 size_t     pet_save(const pet_state_t *s, uint32_t seq, uint8_t *buf, size_t cap);

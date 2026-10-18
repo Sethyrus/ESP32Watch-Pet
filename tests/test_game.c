@@ -70,6 +70,30 @@ int main(void)
     play(GAME_CATCH, 42, BOT_SLOPPY, &m1, &s1);
     play(GAME_CATCH, 42, BOT_SLOPPY, &m2, &s2);
     CHECK(m1 == m2 && s1 == s2, "misma semilla, misma partida");
+
+    /* sucesos para sonidos: el bot perfecto los provoca todos los de su juego */
+    static const uint16_t WANT[GAME_COUNT] = { GEV_CATCH | GEV_STAR, GEV_PAD | GEV_GOOD | GEV_WIN, GEV_TICK | GEV_LIFTED | GEV_WIN };
+    for (int id = 0; id < GAME_COUNT; id++) {
+        pet_game_t g;
+        pet_view_t v = { .seed = 3, .stage = PET_BABY };
+        pet_game_start(&g, (pet_game_id_t)id, 3, &v);
+        uint16_t seen = 0;
+        int pads = 0, maxcombo = 0;
+        pet_input_t in;
+        for (int f = 0; f < 3000 && !pet_game_over(&g); f++) {
+            pet_game_bot_input(&g, &in);
+            pet_game_update(&g, 33, &in);
+            if (g.combo > maxcombo) maxcombo = g.combo;
+            const uint16_t e = pet_game_take_events(&g);
+            pads += (e & GEV_PAD) != 0;
+            seen |= e;
+        }
+        CHECK((seen & WANT[id]) == WANT[id], "%s: sucesos %#x de %#x", pet_game_name((pet_game_id_t)id), seen, WANT[id]);
+        CHECK(!(seen & (GEV_FAIL | GEV_DROP)), "%s: el bot perfecto no falla", pet_game_name((pet_game_id_t)id));
+        if (id == GAME_MEMORY) CHECK(pads >= 2 * (3 + 4 + 5), "Memoria: una nota por tecla mostrada y pulsada (%d)", pads);
+        if (id == GAME_CATCH) CHECK(maxcombo >= 5, "Atrapa: la racha crece (%d)", maxcombo);
+        CHECK(pet_game_take_events(&g) == 0, "%s: tomar los sucesos los vacía", pet_game_name((pet_game_id_t)id));
+    }
     printf("%d comprobaciones, %d fallos\n", checks, fails);
     return fails != 0;
 }

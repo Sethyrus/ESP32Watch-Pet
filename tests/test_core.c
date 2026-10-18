@@ -117,6 +117,10 @@ static void test_food(void)
     s.inv[ITEM_STEW] = 1;
     CHECK(pet_feed(&s, ITEM_STEW, NOON + 20) == FEED_OK && s.inv[ITEM_STEW] == 0 && coins_of(&s) == 2, "del inventario no cobra");
     s.satiety = 40 * PET_ONE;
+    CHECK(pet_bread_free(&s) && pet_feed(&s, ITEM_BREAD, NOON + 25) == FEED_OK && coins_of(&s) == 2, "sin monedas, el pan es gratis");
+    s.coins = 3;
+    CHECK(!pet_bread_free(&s), "con monedas, el pan se paga");
+    s.satiety = 40 * PET_ONE;
     CHECK(pet_feed(&s, ITEM_TREAT, NOON + 30) == FEED_NONE, "la chuche no se compra");
     s.satiety = 96 * PET_ONE; s.coins = 50;
     CHECK(pet_feed(&s, ITEM_BREAD, NOON + 40) == FEED_FULL, "lleno: no quiere");
@@ -463,8 +467,19 @@ static void test_persistence(void)
           "conserva etapa, edad, comida, animo->diversion y rama");
     CHECK(m.inv[ITEM_BREAD] == 3 && m.inv[ITEM_TREAT] == 5 && m.hygiene == PET_MAX && m.coins == 20, "despensa -> inventario; valores nuevos");
     CHECK(m.xp / 5 == s.xp / 5 && m.level >= 1, "PC -> XP");
-    CHECK(pet_save(&m, 4, b, sizeof(b)) == la, "se reguarda como v3");
+    CHECK(pet_save(&m, 4, b, sizeof(b)) == la, "se reguarda como v4");
+    CHECK(m.volume == PET_VOL_DEFAULT, "v2: volumen por defecto");
 
+    /* v3 -> v4: solo añade el volumen */
+    pet_state_t q0 = s;
+    q0.volume = 3;
+    uint8_t v3[PET_SAVE_MAX];
+    size_t l3 = pet_save_version(&q0, 7, 3, v3, sizeof(v3));
+    pet_state_t q;
+    CHECK(l3 + 1 == la && pet_load(&q, v3, l3, NULL) == PET_LOAD_OK, "se carga una partida v3");
+    CHECK(q.coins == s.coins && q.xp == s.xp && q.volume == PET_VOL_DEFAULT, "v3: conserva todo, volumen por defecto");
+    q0.volume = 1;
+    CHECK(pet_save(&q0, 8, c, sizeof(c)) == la && pet_load(&q, c, la, NULL) == PET_LOAD_OK && q.volume == 1, "v4 guarda el volumen");
     /* la partida real del reloj (v2, 2026-10-18) */
     uint8_t real[2][PET_SAVE_MAX];
     size_t lr[2] = { read_file("fixtures/watch_v2_a.bin", real[0], PET_SAVE_MAX),

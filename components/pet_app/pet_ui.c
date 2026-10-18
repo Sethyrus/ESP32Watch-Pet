@@ -11,6 +11,7 @@
 #include "bsp/esp-bsp.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "fonts/pet_fonts.h"
 #include "lvgl.h"
 #include "pet_game.h"
 #include "pet_gfx.h"
@@ -36,12 +37,12 @@ static const char *TAG = "pet_ui";
 typedef enum { P_NONE, P_FOOD, P_PLAY, P_GAME, P_MORE, P_STATUS, P_SHOP, P_ALBUM, P_SETTINGS } panel_t;
 
 // ---------- names (ASCII) ----------
-static const char *const STAGE[] = {"Huevo", "Cria", "Juvenil", "Adulto"};
-static const char *const BRANCH[] = {"", "Hogareno", "Saltarin", "Sabio", "Forzudo"};
+static const char *const STAGE[] = {"Huevo", "Cría", "Juvenil", "Adulto"};
+static const char *const BRANCH[] = {"", "Hogareño", "Saltarín", "Sabio", "Forzudo"};
 static const char *const VARIANT[] = {"Normal", "Pulido", "Torpe", "Raro"};
 static const char *const MOOD[] = {"Durmiendo", "Malito", "Con hambre", "Sucio", "Cansado", "Aburrido", "Contento",
                                    "Tranquilo"};
-static const char *const ITEM_NAME[ITEM_COUNT] = {"Pan", "Fruta", "Guiso", "Pastel", "Chuche de senal", "Medicina"};
+static const char *const ITEM_NAME[ITEM_COUNT] = {"Pan", "Fruta", "Guiso", "Pastel", "Chuche de señal", "Medicina"};
 static const char *const ACC_NAME[ACC_COUNT] = {"Nada", "Lazo", "Flor", "Gorro", "Gafas", "Chistera", "Corona",
                                                 "Radar", "Salacot"};
 static const char *const TRAIN_NAME[GAME_COUNT] = {"Agilidad", "Ingenio", "Fuerza"};
@@ -82,9 +83,12 @@ static int s_px = PET_SCENE_XMAX / 2, s_target = PET_SCENE_XMAX / 2;
 static pet_anim_t s_ov_anim;
 static uint32_t s_ov_start;
 static bool s_ov_active;
-static volatile pet_fx_t s_fx;
-static volatile uint32_t s_fx_start;
-static volatile int s_fx_x, s_fx_y;
+// effects: asked for from LVGL callbacks and ui_task, emitted by ui_task, which owns the
+// particles. The queue is guarded by pet_lock (the LVGL lock may already be held).
+typedef struct { uint8_t fx; int16_t x, y; } fx_req_t;   // x < 0: at the creature's head
+static fx_req_t s_fxq[8];
+static uint8_t s_fxq_n;
+static pet_parts_t s_parts;
 
 // minigame
 static pet_game_t s_game;
@@ -125,7 +129,7 @@ static lv_obj_t *make_button(lv_obj_t *parent, int w, int h, lv_event_cb_t cb, v
 static lv_obj_t *text_button(lv_obj_t *parent, const char *text, int w, int h, lv_event_cb_t cb, void *user)
 {
     lv_obj_t *b = make_button(parent, w, h, cb, user);
-    lv_obj_t *l = make_label(b, &lv_font_montserrat_16, 0xf8fafc);
+    lv_obj_t *l = make_label(b, &pet_font_16, 0xf8fafc);
     lv_label_set_text(l, text);
     lv_obj_center(l);
     return b;
@@ -200,11 +204,14 @@ static void start_override(pet_anim_t a)
 
 static void start_fx(pet_fx_t fx, int x, int y)
 {
-    s_fx_x = x;
-    s_fx_y = y;
-    s_fx_start = pet_mono_ms();
-    s_fx = fx;
+    pet_lock();
+    if (s_fxq_n < sizeof(s_fxq) / sizeof(s_fxq[0])) {
+        s_fxq[s_fxq_n++] = (fx_req_t){(uint8_t)fx, (int16_t)x, (int16_t)y};
+    }
+    pet_unlock();
 }
+
+static void fx_at_head(pet_fx_t fx) { start_fx(fx, -1, -1); }
 
 static void need_bar_style(lv_obj_t *bar, int i)
 {
@@ -267,7 +274,7 @@ static lv_obj_t *open_panel(panel_t kind, const char *title)
     lv_obj_set_style_radius(s_panel, 0, 0);
     lv_obj_set_style_pad_all(s_panel, 0, 0);
     lv_obj_remove_flag(s_panel, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *t = make_label(s_panel, &lv_font_montserrat_24, 0x67e8f9);
+    lv_obj_t *t = make_label(s_panel, &pet_font_24, 0x67e8f9);
     lv_label_set_text(t, title);
     lv_obj_align(t, LV_ALIGN_TOP_MID, 0, 26);
     lv_obj_t *b = text_button(s_panel, "Volver", 150, 46, on_back, NULL);
@@ -295,12 +302,12 @@ static lv_obj_t *list_row(lv_obj_t *parent, int idx, int y, int h, const lv_imag
         lv_obj_remove_flag(im, LV_OBJ_FLAG_CLICKABLE);
         x = 20 + (int)img->header.w;
     }
-    lv_obj_t *l = make_label(b, &lv_font_montserrat_16, 0xf8fafc);
+    lv_obj_t *l = make_label(b, &pet_font_16, 0xf8fafc);
     lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_LEFT, 0);
     lv_obj_set_width(l, 350 - x - 70);
     lv_label_set_long_mode(l, LV_LABEL_LONG_CLIP);
     lv_obj_align(l, LV_ALIGN_LEFT_MID, x, 0);
-    lv_obj_t *r = make_label(b, &lv_font_montserrat_16, 0xfde68a);
+    lv_obj_t *r = make_label(b, &pet_font_16, 0xfde68a);
     lv_obj_align(r, LV_ALIGN_RIGHT_MID, -14, 0);
     if (idx >= 0 && idx < 10) {
         s_rows[idx] = b;
@@ -314,7 +321,7 @@ static void coins_in_title(void)
 {
     lv_obj_t *ic = add_icon(s_panel, ICON_COIN, 2, PANEL_BG);
     lv_obj_align(ic, LV_ALIGN_TOP_RIGHT, -96, 28);
-    s_title_coins = make_label(s_panel, &lv_font_montserrat_20, 0xfde68a);
+    s_title_coins = make_label(s_panel, &pet_font_20, 0xfde68a);
     lv_obj_set_style_text_align(s_title_coins, LV_TEXT_ALIGN_LEFT, 0);
     lv_obj_align(s_title_coins, LV_ALIGN_TOP_LEFT, 410 - 90, 30);
 }
@@ -331,21 +338,27 @@ static void on_food(lv_event_t *e)
     switch (r) {
     case FEED_OK:
         close_panel();
-        start_override(ANIM_EAT);
-        if (fav && it < PET_MENU_COUNT) {
-            start_fx(FX_HEARTS, 0, 0);
-            toast("Su plato favorito!");
-        } else if (it == ITEM_MEDICINE) {
-            toast("Ya esta mejor");
+        if (it == ITEM_MEDICINE) {
+            pet_sound(SND_CURE);
+            fx_at_head(FX_STARS);
+            toast("Ya está mejor");
+        } else {
+            start_override(ANIM_EAT);
+            pet_sound(SND_EAT);
+            if (fav && it < PET_MENU_COUNT) {
+                pet_sound(SND_V_LOVE);
+                fx_at_head(FX_HEARTS);
+                toast("¡Su plato favorito!");
+            }
         }
         pet_mark_dirty();
         break;
-    case FEED_FULL: toast("Esta lleno"); break;
-    case FEED_NO_COINS: toast("Faltan monedas: juega para ganar"); break;
-    case FEED_ASLEEP: toast("Esta durmiendo"); break;
-    case FEED_NOT_SICK: toast("No esta malito"); break;
-    case FEED_EGG: toast("Aun es un huevo"); break;
-    default: toast("No te queda: huele redes para encontrar"); break;
+    case FEED_FULL: pet_sound(SND_DENY); toast("Está lleno"); break;
+    case FEED_NO_COINS: pet_sound(SND_DENY); toast("Faltan monedas: juega para ganar"); break;
+    case FEED_ASLEEP: toast("Está durmiendo"); break;
+    case FEED_NOT_SICK: pet_sound(SND_DENY); toast("No está malito"); break;
+    case FEED_EGG: toast("Aún es un huevo"); break;
+    default: pet_sound(SND_DENY); toast("No te queda: huele redes para encontrar"); break;
     }
 }
 
@@ -372,7 +385,7 @@ static void refresh_food(const pet_state_t *s)
         if (i == ITEM_MEDICINE) {
             snprintf(b, sizeof(b), "%s\n#94a3b8 cura el malito#", ITEM_NAME[i]);
         } else if (fun) {
-            snprintf(b, sizeof(b), "%s%s\n#94a3b8 +%d comida +%d diversion#", ITEM_NAME[i], known_fav ? " (fav)" : "",
+            snprintf(b, sizeof(b), "%s%s\n#94a3b8 +%d comida +%d diversión#", ITEM_NAME[i], known_fav ? " (fav)" : "",
                      food, fun);
         } else {
             snprintf(b, sizeof(b), "%s%s\n#94a3b8 +%d comida#", ITEM_NAME[i], known_fav ? " (fav)" : "", food);
@@ -380,15 +393,18 @@ static void refresh_food(const pet_state_t *s)
         lv_label_set_recolor(s_row_lbl[i], true);
         lv_label_set_text(s_row_lbl[i], b);
         const int price = pet_item_price((pet_item_t)i);
+        const bool free_bread = i == ITEM_BREAD && pet_bread_free(s);
         if (s->inv[i]) {
             snprintf(b, sizeof(b), "x%d", s->inv[i]);
+        } else if (free_bread) {
+            snprintf(b, sizeof(b), "gratis");
         } else if (price) {
             snprintf(b, sizeof(b), "%d", price);
         } else {
             snprintf(b, sizeof(b), "x0");
         }
         lv_label_set_text(s_row_right[i], b);
-        const bool can = s->inv[i] || (price && s->coins >= (uint32_t)price);
+        const bool can = s->inv[i] || free_bread || (price && s->coins >= (uint32_t)price);
         lv_obj_set_style_opa(s_rows[i], can ? LV_OPA_COVER : LV_OPA_50, 0);
     }
 }
@@ -410,10 +426,10 @@ static void on_play(lv_event_t *e)
     char b[48];
     switch (r) {
     case PLAY_OK: request_game(g); break;
-    case PLAY_TIRED: toast("Esta cansado: dejalo dormir"); break;
-    case PLAY_SICK: toast("Esta malito: dale medicina"); break;
-    case PLAY_ASLEEP: toast("Esta durmiendo"); break;
-    case PLAY_EGG: toast("Aun es un huevo"); break;
+    case PLAY_TIRED: pet_sound(SND_DENY); toast("Está cansado: déjalo dormir"); break;
+    case PLAY_SICK: pet_sound(SND_V_SAD); toast("Está malito: dale medicina"); break;
+    case PLAY_ASLEEP: toast("Está durmiendo"); break;
+    case PLAY_EGG: toast("Aún es un huevo"); break;
     default:
         snprintf(b, sizeof(b), "Se desbloquea en el nivel %d", pet_game_level(g));
         toast(b);
@@ -428,7 +444,7 @@ static void open_play(void)
     for (int i = 0; i < GAME_COUNT; i++) {
         list_row(s_panel, i, 74 + i * 96, 88, icon_img(GAME_ICON[i], 4, BTN_BG), on_play);
     }
-    s_info = make_label(s_panel, &lv_font_montserrat_16, 0x94a3b8);
+    s_info = make_label(s_panel, &pet_font_16, 0x94a3b8);
     lv_obj_set_width(s_info, 340);
     lv_obj_align(s_info, LV_ALIGN_TOP_MID, 0, 370);
 }
@@ -444,7 +460,7 @@ static void refresh_play(const pet_state_t *s, int64_t now)
         if (r == PLAY_LOCKED) {
             snprintf(b, sizeof(b), "%s\n#94a3b8 nivel %d#", pet_game_name((pet_game_id_t)i), pet_game_level((pet_game_id_t)i));
         } else {
-            snprintf(b, sizeof(b), "%s\n#94a3b8 %s - record %d#", pet_game_name((pet_game_id_t)i), TRAIN_NAME[i], s->best[i]);
+            snprintf(b, sizeof(b), "%s\n#94a3b8 %s · récord %d#", pet_game_name((pet_game_id_t)i), TRAIN_NAME[i], s->best[i]);
         }
         lv_label_set_recolor(s_row_lbl[i], true);
         lv_label_set_text(s_row_lbl[i], b);
@@ -452,7 +468,7 @@ static void refresh_play(const pet_state_t *s, int64_t now)
         lv_obj_set_style_opa(s_rows[i], r == PLAY_OK ? LV_OPA_COVER : LV_OPA_50, 0);
     }
     if (s_info) {
-        snprintf(b, sizeof(b), "Energia %d. Cada partida gasta 8.", pet_need(s, NEED_ENERGY));
+        snprintf(b, sizeof(b), "Energía %d. Cada partida gasta 8.", pet_need(s, NEED_ENERGY));
         lv_label_set_text(s_info, b);
     }
 }
@@ -484,7 +500,8 @@ static void on_again(lv_event_t *e)
     if (r == PLAY_OK) {
         request_game(id);
     } else {
-        toast(r == PLAY_TIRED ? "Esta cansado: dejalo dormir" : "No puede jugar ahora");
+        pet_sound(SND_DENY);
+        toast(r == PLAY_TIRED ? "Está cansado: déjalo dormir" : "No puede jugar ahora");
     }
 }
 
@@ -514,7 +531,7 @@ static void open_game_screen(void)
     lv_obj_add_event_cb(s_game_img, on_game_touch, LV_EVENT_PRESSING, NULL);
     lv_obj_add_event_cb(s_game_img, on_game_touch, LV_EVENT_RELEASED, NULL);
     lv_obj_add_event_cb(s_game_img, on_game_touch, LV_EVENT_PRESS_LOST, NULL);
-    s_game_hint = make_label(s_panel, &lv_font_montserrat_16, 0x94a3b8);
+    s_game_hint = make_label(s_panel, &pet_font_16, 0x94a3b8);
     lv_obj_set_width(s_game_hint, 370);
     lv_label_set_long_mode(s_game_hint, LV_LABEL_LONG_WRAP);
     lv_obj_align(s_game_hint, LV_ALIGN_TOP_MID, 0, 360);
@@ -530,12 +547,12 @@ static void show_result(const pet_reward_t *r, int score, int perf)
     lv_obj_set_style_border_width(s_result, 3, 0);
     lv_obj_set_style_radius(s_result, 24, 0);
     lv_obj_remove_flag(s_result, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *t = make_label(s_result, &lv_font_montserrat_28, 0xfde68a);
-    lv_label_set_text(t, perf >= 80 ? "Genial!" : perf >= 40 ? "Bien hecho" : "Otra vez sera");
+    lv_obj_t *t = make_label(s_result, &pet_font_28, 0xfde68a);
+    lv_label_set_text(t, perf >= 80 ? "¡Genial!" : perf >= 40 ? "Bien hecho" : "Otra vez será");
     lv_obj_align(t, LV_ALIGN_TOP_MID, 0, 6);
-    lv_obj_t *d = make_label(s_result, &lv_font_montserrat_20, 0xf8fafc);
+    lv_obj_t *d = make_label(s_result, &pet_font_20, 0xf8fafc);
     char b[160];
-    int n = snprintf(b, sizeof(b), "Puntos %d%s\n+%d monedas  +%d XP\n+%d diversion", score, r->record ? " (record!)" : "",
+    int n = snprintf(b, sizeof(b), "Puntos %d%s\n+%d monedas  +%d XP\n+%d diversión", score, r->record ? " (¡récord!)" : "",
                      r->coins, r->xp, r->fun);
     if (r->train) {
         snprintf(b + n, sizeof(b) - n, "\n%s +%d", TRAIN_NAME[s_game.id], r->train);
@@ -580,6 +597,17 @@ static bool game_tick(uint32_t mono)
     s_game_last = mono;
     const pet_input_t in = s_in;
     pet_game_update(&s_game, dt, &in);
+    const uint16_t gev = pet_game_take_events(&s_game);
+    if (gev & GEV_ZAP) pet_sound(SND_ZAP);
+    if (gev & GEV_STAR) pet_sound(SND_STAR);
+    if (gev & GEV_CATCH) pet_sound_pitch(SND_CATCH, s_game.combo > 12 ? 12 : s_game.combo);
+    if (gev & GEV_PAD) pet_sound((snd_id_t)(SND_PAD0 + (s_game.ev_pad & 3)));
+    if (gev & GEV_GOOD) pet_sound(SND_GOOD);
+    if (gev & GEV_FAIL) pet_sound(SND_FAIL);
+    if (gev & GEV_TICK) pet_sound_pitch(SND_TICK, s_game.fill * 12 / 1000);
+    if (gev & GEV_LIFTED) pet_sound(SND_LIFTED);
+    if (gev & GEV_DROP) pet_sound(SND_DROP);
+    if (gev & GEV_WIN) pet_sound(SND_LIFTED);
     pet_game_render(&s_game, s_buf[s_back]);
     const bool over = pet_game_over(&s_game);
     pet_reward_t r = {0};
@@ -591,6 +619,7 @@ static bool game_tick(uint32_t mono)
         pet_take_gains(&g_pet, &c, &x);       // shown on the result card instead
         pet_unlock();
         pet_mark_dirty();
+        pet_sound(r.record ? SND_RECORD : perf >= 40 ? SND_END : SND_V_SAD);
         ESP_LOGI(TAG, "game %d over: score %d perf %d coins %d", s_game.id, score, perf, r.coins);
     }
     if (!bsp_display_lock(LOCK_MS)) {
@@ -650,8 +679,8 @@ static void on_more(lv_event_t *e)
 
 static void open_more(void)
 {
-    open_panel(P_MORE, "Mas");
-    static const char *const names[] = {"Estado", "Armario", "Album", "Ajustes"};
+    open_panel(P_MORE, "Más");
+    static const char *const names[] = {"Estado", "Armario", "Álbum", "Ajustes"};
     for (int i = 0; i < 4; i++) {
         lv_obj_t *b = text_button(s_panel, names[i], 300, 54, on_more, (void *)(intptr_t)i);
         lv_obj_align(b, LV_ALIGN_TOP_MID, 0, 76 + i * 64);
@@ -660,7 +689,7 @@ static void open_more(void)
     const bool gen = pet_can_new_generation(&g_pet, pet_now_s());
     pet_unlock();
     if (gen) {
-        lv_obj_t *b = text_button(s_panel, "Nueva generacion", 300, 54, on_more, (void *)(intptr_t)4);
+        lv_obj_t *b = text_button(s_panel, "Nueva generación", 300, 54, on_more, (void *)(intptr_t)4);
         lv_obj_set_style_bg_color(b, lv_color_hex(0x854d0e), 0);
         lv_obj_align(b, LV_ALIGN_TOP_MID, 0, 76 + 4 * 64);
     }
@@ -671,21 +700,21 @@ static void open_more(void)
 static void open_status(void)
 {
     open_panel(P_STATUS, "Estado");
-    static const char *const names[NEED_COUNT] = {"Comida", "Diversion", "Higiene", "Energia"};
+    static const char *const names[NEED_COUNT] = {"Comida", "Diversión", "Higiene", "Energía"};
     for (int i = 0; i < NEED_COUNT; i++) {
         lv_obj_t *ic = add_icon(s_panel, NEED_ICON[i], 2, PANEL_BG);
         lv_obj_align(ic, LV_ALIGN_TOP_LEFT, 40, 72 + i * 38);
-        lv_obj_t *l = make_label(s_panel, &lv_font_montserrat_16, 0xcbd5e1);
+        lv_obj_t *l = make_label(s_panel, &pet_font_16, 0xcbd5e1);
         lv_label_set_text(l, names[i]);
         lv_obj_align(l, LV_ALIGN_TOP_LEFT, 74, 75 + i * 38);
         s_bars[i] = lv_bar_create(s_panel);
         lv_obj_set_size(s_bars[i], 140, 14);
         need_bar_style(s_bars[i], i);
         lv_obj_align(s_bars[i], LV_ALIGN_TOP_LEFT, 180, 78 + i * 38);
-        s_bar_lbl[i] = make_label(s_panel, &lv_font_montserrat_16, 0xf8fafc);
+        s_bar_lbl[i] = make_label(s_panel, &pet_font_16, 0xf8fafc);
         lv_obj_align(s_bar_lbl[i], LV_ALIGN_TOP_LEFT, 330, 75 + i * 38);
     }
-    s_info = make_label(s_panel, &lv_font_montserrat_16, 0xf8fafc);
+    s_info = make_label(s_panel, &pet_font_16, 0xf8fafc);
     lv_obj_set_width(s_info, 350);
     lv_label_set_recolor(s_info, true);
     lv_obj_align(s_info, LV_ALIGN_TOP_MID, 0, 230);
@@ -718,9 +747,9 @@ static void refresh_status(const pet_state_t *s, int64_t now)
     }
     const int next = pet_next_milestone(s);
     if (next > 0) {
-        snprintf(b + n, sizeof(b) - n, "Senales %u (regalo a las %d)", (unsigned)s->signals, next);
+        snprintf(b + n, sizeof(b) - n, "Señales %u (regalo a las %d)", (unsigned)s->signals, next);
     } else {
-        snprintf(b + n, sizeof(b) - n, "Senales %u", (unsigned)s->signals);
+        snprintf(b + n, sizeof(b) - n, "Señales %u", (unsigned)s->signals);
     }
     lv_label_set_text(s_info, b);
 }
@@ -777,20 +806,22 @@ static void on_acc(lv_event_t *e)
     char b[48];
     pet_lock();
     pet_buy_t r = BUY_OK;
+    bool bought = false;
     if (g_pet.stage == PET_EGG) {
         r = BUY_NOT_SOLD;
     } else if (pet_acc_owned(&g_pet, a)) {
         pet_wear(&g_pet, g_pet.acc_worn == a ? ACC_NONE : a);
     } else {
         r = pet_buy_acc(&g_pet, a);
+        bought = r == BUY_OK;
     }
     const int lvl = pet_acc_level(a);
     pet_unlock();
     switch (r) {
-    case BUY_OK: pet_mark_dirty(); break;
-    case BUY_LOCKED: snprintf(b, sizeof(b), "Se desbloquea en el nivel %d", lvl); toast(b); break;
-    case BUY_NO_COINS: toast("Faltan monedas"); break;
-    default: toast(a >= ACC_RADAR ? "Regalo por oler senales" : "Aun es un huevo"); break;
+    case BUY_OK: pet_sound(bought ? SND_BUY : SND_CLEAN); pet_mark_dirty(); break;
+    case BUY_LOCKED: pet_sound(SND_DENY); snprintf(b, sizeof(b), "Se desbloquea en el nivel %d", lvl); toast(b); break;
+    case BUY_NO_COINS: pet_sound(SND_DENY); toast("Faltan monedas"); break;
+    default: toast(a >= ACC_RADAR ? "Regalo por oler señales" : "Aún es un huevo"); break;
     }
 }
 
@@ -828,10 +859,10 @@ static void refresh_shop(const pet_state_t *s)
             lv_label_set_text(s_row_right[a], worn ? LV_SYMBOL_OK : "");
         } else if (!price) {
             const int need = a == ACC_RADAR ? pet_milestone_signals(1) : pet_milestone_signals(3);
-            snprintf(b, sizeof(b), "%s\n#94a3b8 regalo a las %d senales#", ACC_NAME[a], need);
+            snprintf(b, sizeof(b), "%s\n#94a3b8 regalo a las %d señales#", ACC_NAME[a], need);
             lv_label_set_text(s_row_right[a], "");
         } else if (s->level < lvl) {
-            snprintf(b, sizeof(b), "%s\n#94a3b8 nivel %d - %d monedas#", ACC_NAME[a], lvl, price);
+            snprintf(b, sizeof(b), "%s\n#94a3b8 nivel %d · %d monedas#", ACC_NAME[a], lvl, price);
             lv_label_set_text(s_row_right[a], LV_SYMBOL_CLOSE);
         } else {
             snprintf(b, sizeof(b), "%s\n#94a3b8 comprar#", ACC_NAME[a]);
@@ -849,7 +880,7 @@ static void refresh_shop(const pet_state_t *s)
 
 static void open_album(void)
 {
-    open_panel(P_ALBUM, "Album");
+    open_panel(P_ALBUM, "Álbum");
     s_album_px = heap_caps_malloc(ALBUM_W * ALBUM_H * 2, MALLOC_CAP_SPIRAM);
     if (s_album_px) {
         const uint16_t bg = pet_rgb565(PANEL_BG);
@@ -892,7 +923,7 @@ static void open_album(void)
         lv_image_set_src(im, &s_album_dsc);
         lv_obj_align(im, LV_ALIGN_TOP_MID, 0, 58);
     }
-    s_info = make_label(s_panel, &lv_font_montserrat_14, 0xcbd5e1);
+    s_info = make_label(s_panel, &pet_font_14, 0xcbd5e1);
     lv_obj_set_width(s_info, 330);
     lv_obj_align(s_info, LV_ALIGN_TOP_MID, 0, 382);
 }
@@ -907,7 +938,7 @@ static void refresh_album(const pet_state_t *s)
     for (int i = 0; i < PET_MENU_COUNT; i++) {
         foods += s->tasted >> i & 1;
     }
-    snprintf(b, sizeof(b), "Formas %d/16  Platos %d/4  Gen %d\nRecords: %d / %d / %d", forms, foods, s->generation + 1,
+    snprintf(b, sizeof(b), "Formas %d/16  Platos %d/4  Gen. %d\nRécords: %d / %d / %d", forms, foods, s->generation + 1,
              s->best[0], s->best[1], s->best[2]);
     lv_label_set_text(s_info, b);
 }
@@ -936,13 +967,26 @@ static void on_speed(lv_event_t *e)
     pet_set_time_speed(SPEEDS[i]);
 }
 
+static lv_obj_t *s_vol_btn[PET_VOL_MAX + 1];
+
+static void on_volume(lv_event_t *e)
+{
+    const int v = (int)(intptr_t)lv_event_get_user_data(e);
+    pet_lock();
+    g_pet.volume = (uint8_t)v;
+    pet_unlock();
+    pet_sound_volume(v);
+    pet_sound(SND_COIN);   // a sample at the new volume
+    pet_mark_dirty();
+}
+
 static void on_reset(lv_event_t *e)
 {
     const uint32_t now = pet_mono_ms();
     if (!s_reset_armed || now - s_reset_ms > 5000) {
         s_reset_armed = true;
         s_reset_ms = now;
-        lv_label_set_text(s_reset_lbl, "Seguro? Toca otra vez");
+        lv_label_set_text(s_reset_lbl, "¿Seguro? Toca otra vez");
         return;
     }
     pet_reset_game();
@@ -955,31 +999,39 @@ static void open_settings(void)
     open_panel(P_SETTINGS, "Ajustes");
     static const char *const names[2] = {"Duerme desde", "Despierta a las"};
     for (int i = 0; i < 2; i++) {
-        const int y = 66 + i * 76;
-        lv_obj_t *l = make_label(s_panel, &lv_font_montserrat_16, 0xcbd5e1);
+        const int y = 58 + i * 66;
+        lv_obj_t *l = make_label(s_panel, &pet_font_16, 0xcbd5e1);
         lv_label_set_text(l, names[i]);
         lv_obj_align(l, LV_ALIGN_TOP_MID, 0, y);
         lv_obj_t *m = text_button(s_panel, "-", 64, 42, on_night, (void *)(intptr_t) - (i + 1));
         lv_obj_align(m, LV_ALIGN_TOP_MID, -100, y + 24);
         lv_obj_t *p = text_button(s_panel, "+", 64, 42, on_night, (void *)(intptr_t)(i + 1));
         lv_obj_align(p, LV_ALIGN_TOP_MID, 100, y + 24);
-        s_night_lbl[i] = make_label(s_panel, &lv_font_montserrat_28, 0xf8fafc);
+        s_night_lbl[i] = make_label(s_panel, &pet_font_28, 0xf8fafc);
         lv_obj_align(s_night_lbl[i], LV_ALIGN_TOP_MID, 0, y + 28);
     }
-    lv_obj_t *l = make_label(s_panel, &lv_font_montserrat_16, 0xcbd5e1);
+    lv_obj_t *l = make_label(s_panel, &pet_font_16, 0xcbd5e1);
+    lv_label_set_text(l, "Sonido (de noche, en silencio)");
+    lv_obj_align(l, LV_ALIGN_TOP_MID, 0, 192);
+    static const char *const vol[PET_VOL_MAX + 1] = {"No", "Bajo", "Medio", "Alto"};
+    for (int i = 0; i <= PET_VOL_MAX; i++) {
+        s_vol_btn[i] = text_button(s_panel, vol[i], 72, 40, on_volume, (void *)(intptr_t)i);
+        lv_obj_align(s_vol_btn[i], LV_ALIGN_TOP_MID, -117 + i * 78, 216);
+    }
+    l = make_label(s_panel, &pet_font_16, 0xcbd5e1);
     lv_label_set_text(l, "Velocidad del tiempo (prueba)");
-    lv_obj_align(l, LV_ALIGN_TOP_MID, 0, 222);
-    static const char *const sp[4] = {"x1", "x10", "x60", "+1h"};
+    lv_obj_align(l, LV_ALIGN_TOP_MID, 0, 266);
+    static const char *const sp[4] = {"×1", "×10", "×60", "+1 h"};
     for (int i = 0; i < 4; i++) {
-        lv_obj_t *b = text_button(s_panel, sp[i], 72, 42, on_speed, (void *)(intptr_t)i);
-        lv_obj_align(b, LV_ALIGN_TOP_MID, -117 + i * 78, 248);
+        lv_obj_t *b = text_button(s_panel, sp[i], 72, 40, on_speed, (void *)(intptr_t)i);
+        lv_obj_align(b, LV_ALIGN_TOP_MID, -117 + i * 78, 290);
         if (i < 3) {
             s_speed_btn[i] = b;
         }
     }
-    lv_obj_t *r = text_button(s_panel, "Reiniciar mascota", 280, 48, on_reset, NULL);
+    lv_obj_t *r = text_button(s_panel, "Reiniciar mascota", 280, 44, on_reset, NULL);
     lv_obj_set_style_bg_color(r, lv_color_hex(0x7f1d1d), 0);
-    lv_obj_align(r, LV_ALIGN_TOP_MID, 0, 326);
+    lv_obj_align(r, LV_ALIGN_TOP_MID, 0, 346);
     s_reset_lbl = lv_obj_get_child(r, 0);
 }
 
@@ -993,6 +1045,9 @@ static void refresh_settings(const pet_state_t *s)
     static const int SPEEDS[3] = {1, 10, 60};
     for (int i = 0; i < 3; i++) {
         lv_obj_set_style_bg_color(s_speed_btn[i], lv_color_hex(pet_time_speed() == SPEEDS[i] ? 0x0e7490 : BTN_BG), 0);
+    }
+    for (int i = 0; i <= PET_VOL_MAX; i++) {
+        lv_obj_set_style_bg_color(s_vol_btn[i], lv_color_hex(s->volume == i ? 0x0e7490 : BTN_BG), 0);
     }
     if (s_reset_armed && pet_mono_ms() - s_reset_ms > 5000) {
         s_reset_armed = false;
@@ -1040,11 +1095,12 @@ static void do_wash(void)
     const bool egg = g_pet.stage == PET_EGG;
     pet_unlock();
     if (ok) {
-        start_fx(FX_BUBBLES, 0, 0);
-        toast("Limpito!");
+        fx_at_head(FX_BUBBLES);
+        pet_sound(SND_WASH);
+        toast("¡Limpito!");
         pet_mark_dirty();
     } else {
-        toast(egg ? "Aun es un huevo" : "Esta durmiendo");
+        toast(egg ? "Aún es un huevo" : "Está durmiendo");
     }
 }
 
@@ -1061,12 +1117,15 @@ static void do_sleep(void)
     }
     pet_unlock();
     if (napping) {
+        pet_sound(SND_V_HELLO);
+        start_override(ANIM_BOUNCE);
         toast("Despierto");
     } else if (ok) {
+        pet_sound(SND_V_YAWN);
         toast("Siesta de 30 min");
         pet_mark_dirty();
     } else {
-        toast(egg ? "Aun es un huevo" : "Ya duerme: es de noche");
+        toast(egg ? "Aún es un huevo" : "Ya duerme: es de noche");
     }
 }
 
@@ -1107,7 +1166,7 @@ static void on_bubble(void)
             }
             break;
         }
-        case WISH_PET: toast("Quiere mimos: acaricialo"); break;
+        case WISH_PET: toast("Quiere mimos: acarícialo"); break;
         case WISH_CLEAN: do_wash(); break;
         case WISH_SIGNAL: toast("Quiere oler una red nueva: sal de paseo"); break;
         default: break;
@@ -1140,6 +1199,7 @@ static void on_scene(lv_event_t *e)
             int px, py, pw, ph;
             pet_scene_poop_rect(poop, &px, &py, &pw, &ph);
             start_fx(FX_SPARKLE, px + pw / 2, py + ph / 2);
+            pet_sound(SND_CLEAN);
             pet_mark_dirty();
         }
         return;
@@ -1149,12 +1209,25 @@ static void on_scene(lv_event_t *e)
         const pet_reaction_t r = pet_touch(&g_pet, pet_now_s(), pet_mono_ms());
         const bool egg = g_pet.stage == PET_EGG;
         pet_unlock();
+        int hx, hy;
+        pet_scene_head(&s_last_sc, &hx, &hy);
+        const bool belly = y > hy + 40;   // tummy: tickles; head: a pat
         if (r == REACT_PET) {
             start_override(ANIM_BOUNCE);
-            if (!egg) {
-                start_fx(FX_HEARTS, 0, 0);
+            if (egg) {
+                pet_sound(SND_CRACK);
+            } else if (belly) {
+                pet_sound(SND_V_LAUGH);
+                start_fx(FX_SPARKLE, x, y);
+            } else {
+                pet_sound(SND_V_HAPPY);
+                fx_at_head(FX_HEARTS);
             }
+        } else if (r == REACT_DIZZY) {
+            pet_sound(SND_V_DIZZY);
+            fx_at_head(FX_DIZZY);
         } else if (r == REACT_SHAKE) {
+            pet_sound(SND_V_YAWN);
             toast("Lo has despertado");
         }
     }
@@ -1222,18 +1295,18 @@ void pet_ui_init(void)
     lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(scr, on_gesture, LV_EVENT_GESTURE, NULL);
 
-    s_time = make_label(scr, &lv_font_montserrat_28, 0xf8fafc);
+    s_time = make_label(scr, &pet_font_28, 0xf8fafc);
     lv_obj_align(s_time, LV_ALIGN_TOP_MID, 0, 10);
-    s_batt = make_label(scr, &lv_font_montserrat_16, 0x94a3b8);
+    s_batt = make_label(scr, &pet_font_16, 0x94a3b8);
     lv_obj_align(s_batt, LV_ALIGN_TOP_MID, -130, 48);
-    s_level = make_label(scr, &lv_font_montserrat_16, 0x67e8f9);
+    s_level = make_label(scr, &pet_font_16, 0x67e8f9);
     lv_obj_align(s_level, LV_ALIGN_TOP_MID, 0, 48);
     lv_obj_t *ci = add_icon(scr, ICON_COIN, 2, 0x000000);
     lv_obj_align(ci, LV_ALIGN_TOP_MID, 100, 44);
-    s_coins = make_label(scr, &lv_font_montserrat_16, 0xfde68a);
+    s_coins = make_label(scr, &pet_font_16, 0xfde68a);
     lv_obj_set_style_text_align(s_coins, LV_TEXT_ALIGN_LEFT, 0);
     lv_obj_align(s_coins, LV_ALIGN_TOP_LEFT, 205 + 120, 48);
-    s_gain = make_label(scr, &lv_font_montserrat_16, 0x4ade80);
+    s_gain = make_label(scr, &pet_font_16, 0x4ade80);
     lv_obj_align(s_gain, LV_ALIGN_TOP_LEFT, 205 + 162, 48);
     lv_obj_add_flag(s_gain, LV_OBJ_FLAG_HIDDEN);
 
@@ -1253,14 +1326,14 @@ void pet_ui_init(void)
     lv_obj_add_flag(s_img, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_GESTURE_BUBBLE);
     lv_obj_add_event_cb(s_img, on_scene, LV_EVENT_CLICKED, NULL);
 
-    static const char *const tray[5] = {"Comer", "Jugar", "Asear", "Dormir", "Mas"};
+    static const char *const tray[5] = {"Comer", "Jugar", "Asear", "Dormir", "Más"};
     static const pet_icon_t ticon[5] = {ICON_FOOD, ICON_BALL, ICON_SOAP, ICON_MOON, ICON_MENU};
     for (int i = 0; i < 5; i++) {
         lv_obj_t *b = make_button(scr, 74, 60, on_tray, (void *)(intptr_t)i);
         lv_obj_set_pos(b, 12 + i * 78, 392);
         lv_obj_t *ic = add_icon(b, ticon[i], 2, BTN_BG);
         lv_obj_align(ic, LV_ALIGN_TOP_MID, 0, 6);
-        lv_obj_t *l = make_label(b, &lv_font_montserrat_12, 0xcbd5e1);
+        lv_obj_t *l = make_label(b, &pet_font_12, 0xcbd5e1);
         lv_label_set_text(l, tray[i]);
         lv_obj_align(l, LV_ALIGN_BOTTOM_MID, 0, -5);
     }
@@ -1270,10 +1343,10 @@ void pet_ui_init(void)
     lv_obj_set_style_bg_opa(s_xp_bar, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_bg_color(s_xp_bar, lv_color_hex(0x67e8f9), LV_PART_INDICATOR);
     lv_obj_align(s_xp_bar, LV_ALIGN_TOP_MID, 0, 462);
-    s_xp_lbl = make_label(scr, &lv_font_montserrat_12, 0x64748b);
+    s_xp_lbl = make_label(scr, &pet_font_12, 0x64748b);
     lv_obj_align(s_xp_lbl, LV_ALIGN_TOP_MID, 0, 472);
 
-    s_toast = make_label(scr, &lv_font_montserrat_16, 0xfde68a);
+    s_toast = make_label(scr, &pet_font_16, 0xfde68a);
     lv_obj_set_style_bg_color(s_toast, lv_color_hex(0x111a33), 0);
     lv_obj_set_style_bg_opa(s_toast, LV_OPA_90, 0);
     lv_obj_set_style_pad_hor(s_toast, 14, 0);
@@ -1288,27 +1361,27 @@ void pet_ui_init(void)
 static void events_to_toasts(uint32_t ev, const pet_state_t *s)
 {
     char b[48];
-    if (ev & EVT_HATCHED) toast("Ha nacido!");
+    if (ev & EVT_HATCHED) toast("¡Ha nacido!");
     else if (ev & EVT_EVOLVED) {
         snprintf(b, sizeof(b), "Ha evolucionado: %s%s%s", STAGE[s->stage], s->stage == PET_ADULT ? " " : "",
                  s->stage == PET_ADULT ? BRANCH[s->branch] : "");
         toast(b);
     } else if (ev & EVT_LEVEL) {
-        snprintf(b, sizeof(b), "Nivel %d!", s->level);
+        snprintf(b, sizeof(b), "¡Nivel %d!", s->level);
         toast(b);
     } else if (ev & EVT_MILESTONE) {
         static const char *const M[] = {"monedas", "un Radar", "chuches", "un Salacot", "monedas"};
-        snprintf(b, sizeof(b), "%d senales: regalo de %s", pet_milestone_signals(s->last_milestone),
+        snprintf(b, sizeof(b), "%d señales: regalo de %s", pet_milestone_signals(s->last_milestone),
                  M[s->last_milestone % 5]);
         toast(b);
-    } else if (ev & EVT_WISH_DONE) toast("Deseo cumplido!");
+    } else if (ev & EVT_WISH_DONE) toast("¡Deseo cumplido!");
     else if (ev & EVT_SICK) toast("Se ha puesto malito");
-    else if (ev & EVT_CURED) toast("Ya esta curado");
+    else if (ev & EVT_CURED) toast("Ya está curado");
     else if (ev & EVT_WISH_NEW) toast("Quiere algo: toca la burbuja");
-    else if (ev & EVT_DAILY) toast("Visita del dia");
+    else if (ev & EVT_DAILY) toast("Visita del día");
     else if (ev & EVT_TREAT) toast("Ha encontrado una chuche");
-    else if (ev & EVT_POOP) toast("Ups... caca");
-    else if (ev & EVT_NEW_SIGNAL) toast("Senal nueva olfateada");
+    else if (ev & EVT_POOP) toast("Ups… caca");
+    else if (ev & EVT_NEW_SIGNAL) toast("Señal nueva olfateada");
 }
 
 static int bubble_icon(pet_want_t w, const pet_state_t *s)
@@ -1331,11 +1404,56 @@ static int bubble_icon(pet_want_t w, const pet_state_t *s)
     }
 }
 
+// Sound and particles for what the engine just did; like the toasts, one at a time.
+static void events_to_fx(uint32_t ev)
+{
+    if (ev & EVT_HATCHED) {
+        pet_sound(SND_CRACK);
+        pet_sound(SND_V_HELLO);
+        fx_at_head(FX_STARS);
+    } else if (ev & EVT_EVOLVED) {
+        pet_sound(SND_EVOLVE);
+        fx_at_head(FX_STARS);
+    } else if (ev & EVT_LEVEL) {
+        pet_sound(SND_LEVEL);
+        fx_at_head(FX_STARS);
+    } else if (ev & EVT_MILESTONE) {
+        pet_sound(SND_RECORD);
+    } else if (ev & EVT_WISH_DONE) {
+        pet_sound(SND_WISH_DONE);
+    } else if (ev & EVT_SICK) {
+        pet_sound(SND_V_SAD);
+    } else if (ev & EVT_WISH_NEW) {
+        pet_sound(SND_V_ASK);
+    } else if (ev & EVT_DAILY) {
+        pet_sound(SND_COIN);
+        fx_at_head(FX_COINS);
+    } else if (ev & EVT_TREAT) {
+        pet_sound(SND_STAR);
+    } else if (ev & EVT_POOP) {
+        pet_sound(SND_POOP);
+    } else if (ev & EVT_NEW_SIGNAL) {
+        pet_sound(SND_CLEAN);
+    }
+}
+
 static bool scene_eq(const pet_scene_t *a, const pet_scene_t *b)
 {
     return memcmp(&a->view, &b->view, sizeof(a->view)) == 0 && a->x == b->x && a->hop == b->hop &&
            a->poops == b->poops && a->bubble == b->bubble && a->bubble_wish == b->bubble_wish && a->night == b->night &&
-           a->fx == b->fx && a->fx_ms / 40 == b->fx_ms / 40 && a->t_ms / 400 == b->t_ms / 400;
+           a->t_ms / 400 == b->t_ms / 400;
+}
+
+void pet_ui_wake(void)
+{
+    const int64_t now = pet_now_s();
+    pet_lock();
+    const bool greet = g_pet.stage != PET_EGG && !pet_is_asleep(&g_pet, now);
+    pet_unlock();
+    if (greet && s_kind == P_NONE) {
+        pet_sound(SND_V_HELLO);
+        start_override(ANIM_BOUNCE);
+    }
 }
 
 void pet_ui_tick(void)
@@ -1343,8 +1461,9 @@ void pet_ui_tick(void)
     static pet_scene_t last;
     static bool have_last;
     static int64_t last_sec = -1;
-    static uint32_t last_decide, last_shift;
-    static int shift_n;
+    static uint32_t last_decide, last_shift, last_mono, last_zzz, last_crumb;
+    static int shift_n, last_hop;
+    static bool parts_ready;
     static pet_state_t snap;
 
     if (!s_buf[0] || !s_buf[1]) {
@@ -1382,7 +1501,16 @@ void pet_ui_tick(void)
     }
     const pet_want_t want = pet_want(&g_pet, now);
     snap = g_pet;
+    fx_req_t fxq[sizeof(s_fxq) / sizeof(s_fxq[0])];
+    const int nfx = s_fxq_n;
+    memcpy(fxq, s_fxq, sizeof(fxq));
+    s_fxq_n = 0;
     pet_unlock();
+    if (!parts_ready) {
+        parts_ready = true;
+        pet_parts_init(&s_parts, mono | 1u);
+        last_mono = mono;
+    }
 
     // walking
     if (decided) {
@@ -1422,18 +1550,41 @@ void pet_ui_tick(void)
     sc.bubble_wish = want == WANT_WISH;
     sc.night = pet_is_night(&snap, now);
     sc.t_ms = mono;
-    sc.fx = s_fx;
-    sc.fx_ms = mono - s_fx_start;
-    sc.fx_x = s_fx_x;
-    sc.fx_y = s_fx_y;
-    if (sc.fx != FX_NONE && sc.fx_ms >= pet_scene_fx_ms(sc.fx)) {
-        s_fx = FX_NONE;
-        sc.fx = FX_NONE;
+
+    // sound: the creature's voice follows its form; quiet at night and while it sleeps
+    pet_sound_species(snap.stage, snap.branch, snap.view_seed);
+    pet_sound_mute(sc.night || anim == ANIM_SLEEP);
+    if (ev) {
+        events_to_fx(ev);
     }
+
+    // particles: queued bursts, plus a few that come from what the creature is doing
+    int hx, hy;
+    pet_scene_head(&sc, &hx, &hy);
+    for (int i = 0; i < nfx; i++) {
+        pet_parts_emit(&s_parts, (pet_fx_t)fxq[i].fx, fxq[i].x < 0 ? hx : fxq[i].x, fxq[i].x < 0 ? hy : fxq[i].y);
+    }
+    if (anim == ANIM_SLEEP && snap.stage != PET_EGG && mono - last_zzz >= 1500) {
+        last_zzz = mono;
+        pet_parts_emit(&s_parts, FX_ZZZ, hx, hy);
+    }
+    if (anim == ANIM_EAT && mono - last_crumb >= 260) {
+        last_crumb = mono;
+        pet_parts_emit(&s_parts, FX_CRUMBS, hx, hy + 30);
+    }
+    if (last_hop && !hop && ((mono >> 4) % 3) == 0) {   // landed after a step: a puff now and then
+        pet_parts_emit(&s_parts, FX_DUST, hx, PET_SCENE_FLOOR);
+    }
+    last_hop = hop;
+    pet_parts_step(&s_parts, mono - last_mono);
+    last_mono = mono;
+    const bool parts_on = pet_parts_active(&s_parts);
+    sc.parts = &s_parts;
+
     if (ev & (EVT_HATCHED | EVT_EVOLVED | EVT_LEVEL | EVT_MILESTONE | EVT_WISH_DONE)) {
         pet_mark_dirty();
         if (ev & (EVT_WISH_DONE | EVT_LEVEL)) {
-            start_fx(FX_COINS, 0, 0);
+            fx_at_head(FX_COINS);
         }
     }
     if (ev & (EVT_HATCHED | EVT_EVOLVED)) {
@@ -1446,7 +1597,9 @@ void pet_ui_tick(void)
     }
 
     const bool scene_visible = s_shown == P_NONE;
-    const bool redraw = scene_visible && (!have_last || !scene_eq(&sc, &last));
+    static bool parts_were_on;
+    const bool redraw = scene_visible && (!have_last || parts_on || parts_were_on || !scene_eq(&sc, &last));
+    parts_were_on = parts_on;   // one more frame after the last particle, to clear it
     if (redraw) {
         pet_scene_draw(&sc, s_buf[s_back]);
         last = sc;
