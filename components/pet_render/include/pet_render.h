@@ -18,10 +18,21 @@ enum {
     PAL_WHITE,       /* brillos */
     PAL_ACCENT,      /* parte distintiva (antena, manchas) */
     PAL_BLUSH,       /* mejillas */
+    PAL_GOLD,        /* fijos para accesorios */
+    PAL_RED,
+    PAL_INK,
+    PAL_GREEN,
+    PAL_KHAKI,
     PAL_COUNT
 };
 
 enum { VAR_NORMAL, VAR_POLISHED, VAR_CLUMSY, VAR_ODD };
+
+/* Accesorios (uno a la vez, sobre la cabeza o los ojos). */
+typedef enum {
+    ACC_NONE, ACC_BOW, ACC_FLOWER, ACC_BEANIE, ACC_GLASSES, ACC_TOPHAT, ACC_CROWN,
+    ACC_RADAR, ACC_SAFARI, ACC_COUNT
+} pet_acc_t;
 
 typedef enum { PET_EGG, PET_BABY, PET_JUVENILE, PET_ADULT, PET_STAGE_COUNT } pet_stage_t;
 
@@ -41,7 +52,7 @@ typedef struct {
 typedef struct {
     uint32_t seed;
     uint8_t stage;      /* pet_stage_t */
-    uint8_t shape;      /* silueta dentro de la etapa (candidatas en C0) */
+    uint8_t shape;      /* silueta dentro de la etapa; adulto: 0 hogareno, 1 saltarin, 2 sabio, 3 forzudo */
     uint8_t expr;       /* pet_expr_t */
     bool    squash;     /* respiracion: fase de contraccion */
     int8_t  dy;         /* desplazamiento vertical (botar) */
@@ -52,6 +63,7 @@ typedef struct {
     uint8_t zstep;      /* altura de la "z" al dormir (0..3) */
     bool    blink;      /* parpadeo: ojos cerrados sin cambiar la boca */
     uint8_t crack;      /* huevo a punto de eclosionar: 0 entero, 1 grieta, 2 grieta larga */
+    uint8_t acc;        /* pet_acc_t */
 } pet_view_t;
 
 typedef struct { int w, h; } pet_size_t;

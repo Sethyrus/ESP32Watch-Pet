@@ -1,0 +1,107 @@
+# Recorrido de la interfaz v2: huevo, nacimiento, necesidades, cada panel y los tres juegos.
+# Bandeja (centros): Comer 49, Jugar 127, Asear 205, Dormir 283, Mas 361; y = 422.
+# Escena en (5,106): caca 0 en (41,356), caca 1 en (369,356).
+shot 00-egg
+run 130
+shot 01-hatched
+set satiety 20
+set poops 2
+set coins 60
+wait 600
+shot 02-hungry-poops
+tap 49 422
+wait 300
+shot 03-food
+tap 205 95
+wait 600
+shot 04-eating
+tap 41 356
+wait 300
+shot 05-poop-cleaned
+tap 205 422
+wait 700
+shot 06-wash
+set fun 10
+wait 600
+shot 07-bored
+tap 127 422
+wait 300
+shot 08-play
+tap 205 118
+wait 1500
+press 200 330
+move 80 330 400
+wait 3000
+move 330 330 600
+wait 2000
+shot 09-catch
+release
+wait 26000
+shot 10-catch-result
+pwr
+wait 300
+set level 2
+tap 205 214
+wait 6000
+shot 11-memory
+pwr
+wait 300
+tap 205 310
+wait 400
+tap 200 250
+tap 200 250
+tap 200 250
+tap 200 250
+tap 200 250
+wait 100
+shot 12-lift
+pwr
+pwr
+wait 300
+set train[0] 30
+set train[1] 12
+tap 361 422
+wait 300
+shot 13-more
+tap 205 103
+wait 300
+shot 14-status
+pwr
+wait 200
+set level 5
+set coins 300
+set acc_owned 0x82
+tap 205 167
+wait 400
+shot 15-shop
+tap 205 140
+wait 300
+shot 16-shop-bought
+pwr
+wait 200
+set album 0x0243
+tap 205 231
+wait 400
+shot 17-album
+pwr
+wait 200
+tap 205 295
+wait 300
+shot 18-settings
+pwr
+pwr
+wait 300
+set wish_kind 2
+set wish_arg 1
+set wish_until_s 1800000000
+wait 600
+shot 19-wish
+set stage 3
+set branch 3
+set variant 1
+set acc_worn 6
+wait 600
+shot 20-adult-crown
+clock 23:30
+wait 600
+shot 21-night

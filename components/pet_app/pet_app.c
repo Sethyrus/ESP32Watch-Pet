@@ -65,7 +65,27 @@ static int64_t s_last_batt_s;
 
 void pet_lock(void) { xSemaphoreTake(s_mu, portMAX_DELAY); }
 void pet_unlock(void) { xSemaphoreGive(s_mu); }
-int64_t pet_now_s(void) { return (int64_t)time(NULL); }
+// Game clock: the RTC, or in test mode a clock that runs s_speed times faster from the
+// moment the speed was set, plus any jumps. RAM only: a reboot goes back to real time (the
+// pet then sees the clock go backwards and just re-anchors, pet_step).
+static int s_speed = 1;
+static int64_t s_speed_rtc, s_speed_game, s_skip;
+static int64_t rtc_now(void) { return (int64_t)time(NULL); }
+int64_t pet_now_s(void)
+{
+    const int64_t rtc = rtc_now();
+    return (s_speed > 1 ? s_speed_game + (rtc - s_speed_rtc) * s_speed : rtc) + s_skip;
+}
+int pet_time_speed(void) { return s_speed; }
+void pet_set_time_speed(int mul)
+{
+    const int64_t game = pet_now_s() - s_skip;
+    s_speed_rtc = rtc_now();
+    s_speed_game = game;
+    s_speed = mul < 1 ? 1 : mul;
+}
+void pet_skip_time(int64_t secs) { s_skip += secs; }
+bool pet_in_launcher(void) { return watch_launcher_is_available(); }
 uint32_t pet_mono_ms(void) { return (uint32_t)(esp_timer_get_time() / 1000); }
 void pet_mark_dirty(void) { s_dirty = true; }
 
@@ -103,7 +123,7 @@ static void save_now(void)
     if (pet_store_save(&snap) == ESP_OK) {
         ESP_LOGI(TAG, "saved");
         s_dirty = false;
-        s_last_save_s = pet_now_s();
+        s_last_save_s = rtc_now();
     }
     xSemaphoreGive(s_save_mu);
 }
@@ -111,7 +131,7 @@ static void save_now(void)
 // Event-driven saves at most every SAVE_MIN_S, plus a heartbeat every SAVE_BEAT_S.
 static void maybe_save(void)
 {
-    const int64_t now = pet_now_s();
+    const int64_t now = rtc_now();   // real time: test speed must not multiply NVS writes
     const int64_t since = now - s_last_save_s;
     if (s_force_save || (s_dirty && since >= SAVE_MIN_S) || since >= SAVE_BEAT_S || since < 0) {
         s_force_save = false;
@@ -137,7 +157,7 @@ static void read_battery(int64_t now)
 static void telemetry_tick(void)
 {
     static int64_t last_hour = -1;
-    const int64_t now = pet_now_s();
+    const int64_t now = rtc_now();
     if (now / 3600 == last_hour) {
         return;
     }
@@ -154,14 +174,20 @@ static void telemetry_tick(void)
 
 static bool scan_due(void)
 {
+    static int64_t last_real;
     const int64_t now = pet_now_s();
+    // In test mode the game clock races ahead: keep at least a real minute between scans.
+    if (s_speed > 1 && rtc_now() - last_real < 60) {
+        return false;
+    }
     pet_lock();
     int64_t next = g_pet.stage == PET_EGG ? PET_NEVER : pet_next_scan_s(&g_pet, now, g_usb, g_batt_pct);
     pet_unlock();
-    if (next == PET_NEVER) {
+    if (next == PET_NEVER || now < next || now < s_retry_s) {
         return false;
     }
-    return now >= next && now >= s_retry_s;
+    last_real = rtc_now();
+    return true;
 }
 
 // Claims the radio for one scan; false when one is already running or queued.
@@ -196,7 +222,7 @@ static void radio_task(void *arg)
             const int added = pet_ingest_scan(&g_pet, aps, (size_t)n, pet_now_s());
             const uint32_t scans = g_pet.total_scans;
             pet_unlock();
-            ESP_LOGI(TAG, "scan #%u: %d networks, %d bites added", (unsigned)scans, n, added);
+            ESP_LOGI(TAG, "scan #%u: %d networks, %d new signals", (unsigned)scans, n, added);
             s_dirty = true;
             if (!s_screen_on) {
                 save_now(); // nobody is looking: persist before the chip sleeps again
@@ -215,7 +241,7 @@ static bool stay_awake(void)
     if (s_scanning) {
         return true;
     }
-    const int64_t now = pet_now_s();
+    const int64_t now = rtc_now();
     if (now - s_last_batt_s >= BATT_OFF_S) {
         read_battery(now);
     }
@@ -260,7 +286,7 @@ static void ui_task(void *arg)
 }
 
 // Buttons follow core docs/ARCHITECTURE.md "Convencion De Botones": BOOT is the primary
-// action (opens the pantry), PWR goes back; at the root it returns to the launcher, or
+// action (opens the food menu, or "again" after a game), PWR goes back; at the root it returns to the launcher, or
 // turns the screen off when standalone.
 static void system_task(void *arg)
 {
@@ -298,7 +324,7 @@ static void system_task(void *arg)
             watch_launcher_exit();
         }
 
-        const int64_t now = pet_now_s();
+        const int64_t now = rtc_now();
         if (now - s_last_batt_s >= BATT_ON_S) {
             read_battery(now);
         }
@@ -362,8 +388,8 @@ esp_err_t pet_app_start(void)
         pet_clock_lost(&g_pet, pet_now_s());
         ESP_LOGW(TAG, "RTC lost its time: pet re-anchored");
     }
-    read_battery(pet_now_s());
-    s_last_save_s = pet_now_s(); // the save just loaded (or forced for a new game) is the last one
+    read_battery(rtc_now());
+    s_last_save_s = rtc_now(); // the save just loaded (or forced for a new game) is the last one
 
     watch_display_config_t display = WATCH_DISPLAY_CONFIG_DEFAULT();
     display.brightness = brightness;

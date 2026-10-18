@@ -2,7 +2,7 @@
 
 Mascota virtual tipo Tamagotchi para la Waveshare **ESP32-S3-Touch-AMOLED-2.06** con `ESP-IDF 5.5.4` + `LVGL 9` + BSP oficial de Waveshare.
 
-Estado: **primera version jugable** (motor, escena, despensa, estado, ajustes, escaneo WiFi pasivo, guardado en NVS, noche y escaneo con la pantalla apagada). Falta medir el consumo y probarla horas en la muñeca y como firmware unico. La mascota se alimenta de las redes WiFi de su entorno (escaneo pasivo), evoluciona segun su dieta y los cuidados, y nunca muere.
+Estado: **juego v2** (2026-10-18). Cuatro necesidades con su accion (comer, jugar, asear, dormir), tres minijuegos que entrenan la rama del adulto, monedas, deseos, nivel, accesorios, album de 16 formas y generaciones. El WiFi es exploracion opcional: las senales nuevas dan monedas, chuches y regalos. Nunca muere.
 
 | Documento | Contenido |
 | --- | --- |
@@ -14,6 +14,14 @@ Estado: **primera version jugable** (motor, escena, despensa, estado, ajustes, e
 | [docs/CAPABILITY-MAP.md](docs/CAPABILITY-MAP.md) | Modulos y fases |
 
 Se podra instalar como app junto a las demas (slot OTA) o como unico firmware del reloj (standalone); ver `PET_TECH.md`.
+
+## Probar sin el reloj
+
+```sh
+make -C tests test          # motor, bots de jugador (semanas en segundos) y minijuegos
+make -C tools/uisim shots   # la interfaz real en el PC: capturas PNG en tools/uisim/out/
+make -C tools/uisim run     # ventana interactiva (raton = dedo, b = BOOT, p = PWR)
+```
 
 ## Compilar y flashear
 

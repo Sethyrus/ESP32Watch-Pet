@@ -1,6 +1,6 @@
 # Pet Tech: especificación técnica
 
-Estado: **lista para arrancar.** Producto en `PET_DESIGN.md`; decisiones en `DECISIONS.md`. Lo verificado el 2026-10-17 (código de core, compilaciones de prueba) se marca **[verificado]**; lo que solo puede medirse en el reloj, **[medir en F2]**.
+Estado: **juego v2** (2026-10-18; ver `DECISIONS.md`, R16–R21). Producto en `PET_DESIGN.md`; decisiones en `DECISIONS.md`. Lo verificado el 2026-10-17 (código de core, compilaciones de prueba) se marca **[verificado]**; lo que solo puede medirse en el reloj, **[medir en F2]**.
 
 ## 1. Estructura
 
@@ -8,20 +8,24 @@ Estado: **lista para arrancar.** Producto en `PET_DESIGN.md`; decisiones en `DEC
 ESP32Watch-Pet/
 ├── components/
 │   ├── pet_core/      C99 puro: estado, reglas, tiempo, serialización. Sin ESP-IDF.
-│   ├── pet_render/    C99 puro: paleta, máscaras, cara, animación → búfer indexado.
+│   ├── pet_render/    C99 puro: paleta, máscaras, cara, animación, iconos (pet_gfx), escena (pet_scene).
+│   ├── pet_game/      C99 puro: minijuegos deterministas (lógica + dibujo en RGB565).
 │   └── pet_app/       ESP-IDF: UI (LVGL), radio, persistencia, energía (usa watch_board).
 ├── tools/
-│   ├── sim/           Simulador PC: tests headless, hojas de contacto, ventana SDL2.
+│   ├── sim/           Hojas de contacto, escenas y fotogramas de juego en PNG.
+│   ├── uisim/         La UI LVGL real en el PC (SDL2 o por guion con capturas PNG).
 │   └── probes/        Firmwares de medición (no son la app; ver sección 8).
-├── tests/             Tests headless de ciclo de vida (compilan con `cc`).
+├── tests/             Tests headless: motor, bots de jugador y de minijuegos (compilan con `cc`).
 └── docs/
 ```
 
-`pet_core` y `pet_render` no incluyen cabeceras de ESP-IDF, LVGL ni SDL: reciben el tiempo, el azar y las entradas como parámetros, de modo que **el mismo código compila para el simulador, los tests y el firmware** (patrón de pocket-tank y de `ESP32Watch-Fluid/components/fluid_engine` + `tools/host_bench`).
+**Escena y juegos (v2):** `pet_scene` y `pet_game` dibujan en un búfer RGB565 de 400×280 en PSRAM (doble búfer) que la UI enseña con un `lv_image`; la escena se redibuja solo cuando cambia algo. `tools/uisim` compila `pet_ui*.c` sin tocarlo con unos shims (`bsp/esp-bsp.h`, `esp_heap_caps.h`, `esp_log.h`) e implementa `pet_priv.h`. Imagen del firmware: 1,14 MiB (cabe en `factory`).
+
+`pet_core`, `pet_render` y `pet_game` no incluyen cabeceras de ESP-IDF, LVGL ni SDL: reciben el tiempo, el azar y las entradas como parámetros, de modo que **el mismo código compila para el simulador, los tests y el firmware** (patrón de pocket-tank y de `ESP32Watch-Fluid/components/fluid_engine` + `tools/host_bench`).
 
 ### API de `pet_core` (real: `components/pet_core/include/pet_core.h`)
 
-Resumen; la cabecera es la referencia. Tiempo en segundos de hora local; los eventos con subsegundos reciben además un reloj monotónico en ms. `pet_view()` rellena el `pet_view_t` de `pet_render` y devuelve la animación recomendada (`pet_core/pet_view.c` es el único punto que incluye `pet_render.h`). `pet_step` trata un hueco > 5 min como ausencia (`pet_catch_up`); la app **solo** llama a `pet_step` con la pantalla encendida y a `pet_ingest_scan` en segundo plano. Partida v2, 563 B (estado en RAM 1,1 KB): `pet_save`/`pet_load`/`pet_load_ab` (A/B con CRC y migración v1→v2 probada).
+Resumen; la cabecera es la referencia. Tiempo en segundos de hora local; los eventos con subsegundos reciben además un reloj monotónico en ms. `pet_view()` rellena el `pet_view_t` de `pet_render` y devuelve la animación recomendada (`pet_core/pet_view.c` es el único punto que incluye `pet_render.h`). `pet_step` trata un hueco > 5 min como ausencia (`pet_catch_up`); la app **solo** llama a `pet_step` con la pantalla encendida y a `pet_ingest_scan` en segundo plano. Partida v3, 653 B: `pet_save`/`pet_load`/`pet_load_ab` (A/B con CRC; migración v1/v2→v3 probada, también con la partida real del reloj).
 
 Boceto original:
 

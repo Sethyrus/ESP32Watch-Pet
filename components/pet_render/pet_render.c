@@ -42,6 +42,9 @@ void pet_palette_rgb888(uint32_t seed, uint32_t out[PAL_COUNT])
     out[PAL_BASE] = r->base;    out[PAL_LIGHT] = r->light;
     out[PAL_WHITE] = 0xf4f4f4;  out[PAL_ACCENT] = r->accent;
     out[PAL_BLUSH] = r->blush;
+    out[PAL_GOLD] = 0xffcd75;   out[PAL_RED] = 0xb13e53;
+    out[PAL_INK] = 0x333c57;    out[PAL_GREEN] = 0x38b764;
+    out[PAL_KHAKI] = 0xc8a96e;
 }
 
 void pet_palette_rgb565(uint32_t seed, uint16_t out[PAL_COUNT])
@@ -126,6 +129,60 @@ static void adorn(uint8_t *idx, int x, int y, int h, const char *const *rows)
         for (int i = 0; rows[j][i]; i++) put(idx, x + i, y + j, rows[j][i]);
 }
 
+/* ---- Accesorios ---- */
+/* d oscuro, k tinta, r rojo, g oro, n verde, h caqui, w blanco. Mapas completos (no espejados);
+ * sink = filas que se hunden en la cabeza; side: 0 centrado, 1 a la derecha, -1 a la izquierda. */
+typedef struct { int w, h, sink, side; const char *r[10]; } acc_bmp_t;
+static const acc_bmp_t ACCS[ACC_COUNT] = {
+    [ACC_BOW]    = {9, 5, 1, 1, {".rr...rr.", "rrrrdrrrr", "rrrdddrrr", "rrrrdrrrr", ".rr...rr."}},
+    [ACC_FLOWER] = {7, 5, 1, -1, {".rr.rr.", "rrrrrrr", ".rrgrr.", "rrrrrrr", ".rr.rr."}},
+    [ACC_BEANIE] = {14, 7, 3, 0, {"......ww......", ".....dwwd.....", "...ddrrrrdd...", "..drrrrrrrrd..",
+                                  ".drrrrrrrrrrd.", ".dwwwwwwwwwwd.", ".dwwwwwwwwwwd."}},
+    [ACC_TOPHAT] = {12, 9, 1, 0, {"..dddddddd..", "..dkkkkkkd..", "..dkkkkkkd..", "..dkkkkkkd..", "..dkkkkkkd..",
+                                  "..drrrrrrd..", "dddddddddddd", "dkkkkkkkkkkd", "dddddddddddd"}},
+    [ACC_CROWN]  = {10, 5, 0, 0, {"g...gg...g", "gg.gggg.gg", "gggggggggg", "grgwggwgrg", "gggggggggg"}},
+    [ACC_RADAR]  = {3, 7, 0, 0, {".r.", "rwr", ".r.", ".k.", ".k.", ".k.", "kkk"}},
+    [ACC_SAFARI] = {16, 7, 2, 0, {".....dddddd.....", "....dhhhhhhd....", "....dhhhhhhd....", "...ddkkkkkkdd...",
+                                  "dddhhhhhhhhhhddd", "dhhhhhhhhhhhhhhd", "dddddddddddddddd"}},
+};
+
+static void put_acc(uint8_t *idx, int x, int y, char c)
+{
+    uint8_t p;
+    switch (c) {
+    case 'd': p = PAL_DARK; break;
+    case 'k': p = PAL_INK; break;
+    case 'r': p = PAL_RED; break;
+    case 'g': p = PAL_GOLD; break;
+    case 'n': p = PAL_GREEN; break;
+    case 'h': p = PAL_KHAKI; break;
+    case 'w': p = PAL_WHITE; break;
+    default: return;
+    }
+    if (x >= 0 && x < PET_W && y >= 0 && y < PET_H) idx[y * PET_W + x] = p;
+}
+
+static void draw_accessory(uint8_t *idx, const pet_view_t *v, int head_y, int exl, int eyy, int ew, int eh, int exr)
+{
+    if (v->acc == ACC_GLASSES) {           /* montura dorada alrededor de los ojos */
+        if (exl < 0) return;
+        for (int k = 0; k < 2; k++) {
+            int x0 = (k ? exr : exl) - 1, x1 = (k ? exr : exl) + ew, y0 = eyy - 1, y1 = eyy + eh;
+            for (int x = x0; x <= x1; x++) { put_acc(idx, x, y0, 'g'); put_acc(idx, x, y1, 'g'); }
+            for (int y = y0; y <= y1; y++) { put_acc(idx, x0, y, 'g'); put_acc(idx, x1, y, 'g'); }
+        }
+        for (int x = exl + ew + 1; x < exr - 1; x++) put_acc(idx, x, eyy, 'g');
+        return;
+    }
+    const acc_bmp_t *a = &ACCS[v->acc];
+    if (!a->w) return;
+    int x = PET_W / 2 - a->w / 2 + a->side * 9, y = head_y + a->sink - a->h;
+    if (a->side) y += 2;
+    if (y < 0) y = 0;
+    for (int j = 0; j < a->h; j++)
+        for (int i = 0; i < a->w; i++) put_acc(idx, x + i, y + j, a->r[j][i]);
+}
+
 /* ---- Criatura ---- */
 bool pet_render_creature(const pet_view_t *v, uint8_t *idx, int w, int h)
 {
@@ -138,7 +195,7 @@ bool pet_render_creature(const pet_view_t *v, uint8_t *idx, int w, int h)
 
     uint8_t L[PET_H][PET_W];
     memset(L, 0, sizeof L);
-    int ex = -1, ey = -1, my = -1, fx = -1, fy = -1, gx = -1, gy = -1;
+    int ex = -1, ey = -1, my = -1, fx = -1, fy = -1, gx = -1, gy = -1, hy = -1;
     for (int y = 0; y < m->h; y++)
         for (int x = 0; x < wh; x++) {
             char c = m->rows[y][x];
@@ -155,10 +212,13 @@ bool pet_render_creature(const pet_view_t *v, uint8_t *idx, int w, int h)
             default: break;
             }
             if (body) L[Y][xl] = L[Y][xr] = 1;
+            if (body && x == wh - 1 && hy < 0) hy = y;     /* coronilla, en el centro */
         }
 
     /* orejas / antena (no en el huevo) */
-    if (v->stage != PET_EGG) {
+    const bool hat = v->acc == ACC_BEANIE || v->acc == ACC_TOPHAT || v->acc == ACC_CROWN ||
+                     v->acc == ACC_SAFARI || v->acc == ACC_RADAR;
+    if (v->stage != PET_EGG && !(hat && t.ear == 2)) {   /* la antena no asoma bajo un sombrero */
         const bool big = v->stage >= PET_JUVENILE && !(v->stage == PET_ADULT && v->shape == 0);
         const pet_piece_t *p = (big ? PET_EARS_L : PET_EARS) + t.ear;
         const int rdrop = v->variant == VAR_CLUMSY ? 2 : 0;
@@ -299,6 +359,7 @@ bool pet_render_creature(const pet_view_t *v, uint8_t *idx, int w, int h)
     }
 
     /* cara */
+    int exl_out = -1, exr_out = -1, eyy_out = -1, eyw_out = 0, eyh_out = 0;
     if (v->stage != PET_EGG && ey >= 0) {
         const bmp_t *eye = (v->stage >= PET_JUVENILE ? EYES5 : EYES) + (v->blink ? EXPR_SLEEP : (v->expr < EXPR_COUNT ? v->expr : 0));
         const bmp_t *mouth = &MOUTHS[v->mouth_open ? EXPR_HUNGRY : (v->expr < EXPR_COUNT ? v->expr : 0)];
@@ -317,6 +378,7 @@ bool pet_render_creature(const pet_view_t *v, uint8_t *idx, int w, int h)
         }
         draw_bmp(idx, eye, exl, eyy, false);
         draw_bmp(idx, eye, exr, eyy + ryo, true);
+        exl_out = exl; exr_out = exr; eyy_out = eyy; eyw_out = eye->w; eyh_out = eye->h;
         if (my >= 0) draw_bmp(idx, mouth, PET_W / 2 - mouth->w / 2 - ryo + SHEAR(y0 + my), MAPY(y0 + my), false);
         const int ay = ctop > 6 ? ctop - 5 : 1, ax = PET_W - 13;
         const int ty = eyy + eye->h;   /* bajo el ojo */
@@ -330,6 +392,9 @@ bool pet_render_creature(const pet_view_t *v, uint8_t *idx, int w, int h)
         default: break;
         }
     }
+
+    if (v->stage != PET_EGG && v->acc != ACC_NONE && v->acc < ACC_COUNT && hy >= 0)
+        draw_accessory(idx, v, MAPY(y0 + hy), ex >= 0 ? exl_out : -1, eyy_out, eyw_out, eyh_out, exr_out);
     return true;
 }
 

@@ -7,13 +7,13 @@ Registro de decisiones del proyecto. Criterio general (usuario, 2026-10-17): **p
 | # | Decisión | Detalle |
 | --- | --- | --- |
 | D1 | Tono indulgente | Nunca muere; el descuido solo ralentiza, empeora el ánimo y orienta a formas torpes o raras. |
-| D2 | Crecimiento por entorno | La dieta de señales es el eje principal. |
+| D2 | ~~Crecimiento por entorno~~ | ~~La dieta de señales es el eje principal.~~ Sustituida por R16: el WiFi es exploración opcional. |
 | D3 | Uso mixto | Modos mesa y muñeca, detectados solos. |
 | D4 | Arte 100 % por código | Sin assets de terceros en el producto. |
 | D5 | Evolución visible | Cambia de forma entre etapas y según la rama. |
 | D6 | Despliegue | App junto a las demás **y** standalone. El modo Launcher/esfera queda para el futuro. |
 | D7 | Enfoque de arte | Máscaras pixel art a mano en C + variación por semilla + cara y animación por código. |
-| D8 | Ciclo de vida | ≈ 1 semana hasta adulto. |
+| D8 | Ciclo de vida | ≈ 1 semana hasta adulto. Con v2 (R16): adulto el día 4–5 jugando a diario, 8–11 con una visita al día. |
 | D9 | Radios del MVP | Solo WiFi pasivo; BLE tras medir. |
 
 ## Técnicas (cerradas con criterio funcional)
@@ -57,6 +57,20 @@ Registro de decisiones del proyecto. Criterio general (usuario, 2026-10-17): **p
 | R14 | Diario horario de batería y escaneos en NVS (`pet:tlm`, 120 entradas de 10 B, un blob que se reescribe cada hora), leído con `tools/read_log.py`: mide el consumo con la propia app, sin firmware de prueba. Cada fila lleva USB, pantalla y arranque; los mV/h solo valen entre filas consecutivas en batería. |
 | R15 | Comer y acariciar reinician el aburrimiento (`last_novel_s`), no la curiosidad: con un entorno estable la mascota ya no está aburrida todo el día. Avisos fijos bajo la hora: despensa llena, caduca pronto (< 2 h), señal lejana por comer. |
 | R13 | La curiosidad por señal nueva (`MOOD_CURIOUS`) se dibuja con cara neutra, no con la de sorpresa (confundía: parecía un susto). La sorpresa queda para la sacudida. |
+
+## Rediseño v2 (2026-10-18)
+
+Motivo (usuario, 2026-10-18): el juego v1 era simple, poco claro y aburrido; nada de lo que hacía el jugador le quitaba el aburrimiento, todo dependía de llevar el reloj encima y probar cada cambio costaba días.
+
+| # | Decisión | Por qué |
+| --- | --- | --- |
+| R16 | **Juego v2** (`PET_DESIGN.md`). Cuatro necesidades, cada una con una acción clara: comida → comer, diversión → jugar, higiene → asear (cacas), energía → dormir o siesta. También monedas, carta de comida, tres minijuegos, deseos, nivel y XP, accesorios, álbum y generaciones. **El WiFi deja de ser la comida** y pasa a exploración opcional: las señales nuevas dan monedas, chuches e hitos con regalos. | Cada visita tiene algo que hacer y una recompensa, y se puede jugar entero en casa. Los bots lo comprueban: quien juega en casa evoluciona igual de rápido que quien sale (B2). |
+| R17 | **Pruebas sin el reloj:**<br>- bots de jugador en `tests/`, que simulan semanas en segundos;<br>- minijuegos deterministas con bots;<br>- `tools/uisim`: la interfaz LVGL real en el PC, con capturas por guion;<br>- velocidad del tiempo ×10/×60 y «+1 h» en Ajustes.<br>En el reloj solo quedan pruebas cortas de sensación y fluidez. | Probar cada cambio llevando el reloj días era inviable. |
+| R18 | **Rama del adulto según el juego al que más ha jugado**: Atrapa → Saltarín (la forma del antiguo Explorador), Memoria → Sabio, Pesas → Forzudo; sin jugar, Hogareño. La variante sale del cuidado. Son 16 formas para el álbum y, con generaciones, se pueden completar. | El jugador decide en qué se convierte jugando; antes lo decidía el entorno WiFi. |
+| R19 | **Partida v3 con migración de v2:**<br>- ánimo → diversión;<br>- PC × 5 → XP;<br>- despensa: domésticos → pan, exóticos y urbanos → chuches;<br>- la rama Explorador pasa a Saltarín.<br>Se conserva la mascota del reloj (comprobado con su partida real, `tests/fixtures/watch_v2_*.bin`, anonimizada: clave ficticia y sin tablas de redes). Copia previa de la NVS en `backups/` (fuera de git). | No perder la cría que ya tenía el usuario. |
+| R20 | **Pantalla apagada = ausencia.** El motor solo avanza con la pantalla encendida, así que el ritmo del día lo marcan las reglas de ausencia: comida al 60 %, diversión e higiene al 50 %, con suelos. | Calibrado con los bots, que pasan el día casi siempre con la pantalla apagada, como el reloj. |
+| R21 | **La velocidad del tiempo solo afecta al reloj del juego.** Vive en RAM y vuelve a ×1 al reiniciar. Guardados, batería y diario siguen el RTC, y entre escaneos pasa al menos 1 min real. | Con ×60 los guardados por tiempo multiplicarían las escrituras en NVS. |
+
 | R4 | Valores numéricos de `PET_DESIGN.md` como punto de partida; se calibran con los tests A1–A10 en F1. |
 
 ## Abiertas

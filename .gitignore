@@ -33,3 +33,5 @@ eim_config.toml
 
 # Hojas de contacto generadas (tools/sim)
 sheets/
+backups/
+!tests/fixtures/*.bin

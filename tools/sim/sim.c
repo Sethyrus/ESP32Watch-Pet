@@ -1,6 +1,8 @@
 /* Simulador PC de Pet: hojas de contacto y comprobaciones automaticas del arte.
  * Uso: sim sheets <dir> [escala] | sim check */
 #include "pet_render.h"
+#include "pet_scene.h"
+#include "pet_game.h"
 #include "png.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -82,21 +84,41 @@ static int sheet_lineage(const char *path, int sc, FILE *legend)
     return rc;
 }
 
-/* C2: adultos x variantes de cuidado. */
+/* C2: adultos (4 ramas) x variantes de cuidado. */
 static int sheet_adults(const char *path, int sc, FILE *legend)
 {
     const int cell = PET_W * sc;
     canvas_t c = canvas_new(4 * cell, 4 * cell);
-    fprintf(legend, "Adultos: columnas = normal, pulida, torpe, rara; filas = Hogareno coral, Explorador coral, Hogareno cielo, Explorador cielo\n");
+    fprintf(legend, "Adultos: columnas = normal, pulida, torpe, rara; filas = Hogareno, Saltarin, Sabio, Forzudo (coral, cielo, menta, niebla)\n");
     for (int r = 0; r < 4; r++)
         for (int vr = 0; vr < 4; vr++) {
-            int fam = r < 2 ? 0 : 2;
-            pet_view_t v = { SEED(fam, fam, fam == 0 ? 1 : 2, 7), PET_ADULT, (uint8_t)(r & 1), EXPR_NEUTRAL, false, 0, 0, (uint8_t)vr };
+            static const int fam[4] = {0, 2, 1, 3};
+            pet_view_t v = { SEED(fam[r], r % 3, r, 7), PET_ADULT, (uint8_t)r, EXPR_NEUTRAL, false, 0, 0, (uint8_t)vr, 0, 0, 0, false, 0, 0 };
             draw(&v, &c, vr * cell, r * cell, sc, false);
             static const char *const VN[4] = {"NORMAL", "PULIDA", "TORPE", "RARA"};
+            static const char *const BN[4] = {"HOGARENO", "SALTARIN", "SABIO", "FORZUDO"};
             char lb[48];
-            snprintf(lb, sizeof lb, "%s %s %s", (r & 1) ? "EXPLORADOR" : "HOGARENO", fam ? "CIELO" : "CORAL", VN[vr]);
+            snprintf(lb, sizeof lb, "%s %s", BN[r], VN[vr]);
             label(&c, vr * cell + 3, r * cell + 3, lb);
+        }
+    int rc = png_write_rgb(path, c.px, c.w, c.h);
+    free(c.px);
+    return rc;
+}
+
+/* C4: accesorios. Columnas = accesorio; filas = cria, juvenil y los 4 adultos (orejas variadas). */
+static int sheet_acc(const char *path, int sc, FILE *legend)
+{
+    const int cell = PET_W * sc, cols = ACC_COUNT - 1;
+    canvas_t c = canvas_new(cols * cell, 6 * cell);
+    fprintf(legend, "Accesorios: columnas = lazo, flor, gorro, gafas, chistera, corona, radar, salacot; filas = cria, juvenil, hogareno, saltarin, sabio, forzudo\n");
+    static const char *const AN[ACC_COUNT] = {"", "LAZO", "FLOR", "GORRO", "GAFAS", "CHISTERA", "CORONA", "RADAR", "SALACOT"};
+    for (int r = 0; r < 6; r++)
+        for (int a = 1; a < ACC_COUNT; a++) {
+            uint8_t st = r == 0 ? PET_BABY : r == 1 ? PET_JUVENILE : PET_ADULT;
+            pet_view_t v = { SEED(r % 4, r % 3, r % 4, 5), st, (uint8_t)(r >= 2 ? r - 2 : 0), EXPR_HAPPY, false, 0, 0, 0, 0, 0, 0, false, 0, (uint8_t)a };
+            draw(&v, &c, (a - 1) * cell, r * cell, sc, false);
+            label(&c, (a - 1) * cell + 3, r * cell + 3, AN[a]);
         }
     int rc = png_write_rgb(path, c.px, c.w, c.h);
     free(c.px);
@@ -230,8 +252,70 @@ static int check(void)
     return fails != 0;
 }
 
+/* C5: escenas y minijuegos tal como los compone el firmware (RGB565 -> PNG). */
+static int write565(const char *path, const uint16_t *px, int w, int h)
+{
+    uint32_t *rgb = malloc((size_t)w * h * 4);
+    for (int i = 0; i < w * h; i++) {
+        uint16_t c = px[i];
+        rgb[i] = ((uint32_t)(c >> 11) * 255 / 31) << 16 | ((uint32_t)((c >> 5) & 63) * 255 / 63) << 8 | (uint32_t)(c & 31) * 255 / 31;
+    }
+    int rc = png_write_rgb(path, rgb, w, h);
+    free(rgb);
+    return rc;
+}
+
+static int scenes(const char *dir)
+{
+    static uint16_t fb[PET_SCENE_W * PET_SCENE_H];
+    char p[512];
+    int rc = 0;
+    struct { const char *name; pet_scene_t sc; } S[] = {
+        { "s1_cria_hambre", { .view = { SEED(0, 0, 3, 7), PET_BABY, 0, EXPR_HUNGRY, false, 0, 0, 0, 0, 0, 0, false, 0, 0 },
+                              .x = 60, .poops = 2, .bubble = ICON_BREAD, .t_ms = 0 } },
+        { "s2_adulto_corona", { .view = { SEED(2, 1, 1, 7), PET_ADULT, 2, EXPR_HAPPY, false, 0, 0, VAR_POLISHED, 0, 0, 0, false, 0, ACC_CROWN },
+                                .x = 140, .bubble = ICON_BALL, .bubble_wish = true, .fx = FX_HEARTS, .fx_ms = 500 } },
+        { "s3_noche", { .view = { SEED(1, 2, 2, 7), PET_JUVENILE, 0, EXPR_SLEEP, false, 0, 0, 0, 0, 0, 2, false, 0, ACC_BEANIE },
+                        .x = 80, .night = true, .poops = 1, .bubble = -1 } },
+        { "s4_banio", { .view = { SEED(3, 0, 0, 7), PET_ADULT, 3, EXPR_HAPPY, false, 0, 0, 0, 0, 0, 0, false, 0, 0 },
+                        .x = 0, .bubble = -1, .fx = FX_BUBBLES, .fx_ms = 700 } },
+    };
+    for (size_t i = 0; i < sizeof S / sizeof S[0]; i++) {
+        pet_scene_draw(&S[i].sc, fb);
+        snprintf(p, sizeof p, "%s/%s.png", dir, S[i].name);
+        rc |= write565(p, fb, PET_SCENE_W, PET_SCENE_H);
+    }
+    /* minijuegos con el bot perfecto, en varios instantes */
+    static uint16_t gb[PET_GAME_W * PET_GAME_H];
+    const uint32_t at[GAME_COUNT] = { 12000, 4100, 2600 };
+    for (int id = 0; id < GAME_COUNT; id++) {
+        pet_game_t g;
+        pet_view_t v = { SEED(id, id, id, 7), PET_JUVENILE, 0, EXPR_NEUTRAL, false, 0, 0, 0, 0, 0, 0, false, 0, 0 };
+        pet_game_start(&g, (pet_game_id_t)id, 99, &v);
+        pet_input_t in;
+        while (g.t_ms < at[id] && !pet_game_over(&g)) { pet_game_bot_input(&g, &in); pet_game_update(&g, 33, &in); }
+        pet_game_render(&g, gb);
+        snprintf(p, sizeof p, "%s/g%d_%s.png", dir, id, pet_game_name((pet_game_id_t)id));
+        rc |= write565(p, gb, PET_GAME_W, PET_GAME_H);
+        printf("%s\n", p);
+    }
+    /* iconos */
+    canvas_t c = canvas_new(ICON_COUNT * 40, 40);
+    for (int k = 0; k < ICON_COUNT; k++)
+        for (int y = 0; y < PET_ICON; y++)
+            for (int x = 0; x < PET_ICON; x++) {
+                uint32_t px = pet_icon_pixel((pet_icon_t)k, x, y);
+                if (px) fill(&c, k * 40 + 2 + x * 3, 2 + y * 3, 3, 3, px & 0xffffff);
+            }
+    snprintf(p, sizeof p, "%s/icons.png", dir);
+    rc |= png_write_rgb(p, c.px, c.w, c.h);
+    free(c.px);
+    return rc;
+}
+
 int main(int argc, char **argv)
 {
+    if (argc >= 3 && !strcmp(argv[1], "scenes")) return scenes(argv[2]);
     if (argc >= 2 && !strcmp(argv[1], "check")) return check();
     if (argc >= 3 && !strcmp(argv[1], "sheets")) {
         int sc = argc > 3 ? atoi(argv[3]) : 3;
@@ -246,7 +330,10 @@ int main(int argc, char **argv)
         snprintf(ap, sizeof ap, "%s/c2_adults.png", argv[2]);
         char np[512];
         snprintf(np, sizeof np, "%s/c3_anim.png", argv[2]);
-        int r = sheet_lineage(p, sc, lg) | sheet_faces(q, sc, lg) | sheet_adults(ap, sc, lg) | sheet_anim(np, lg);
+        char cp[512];
+        snprintf(cp, sizeof cp, "%s/c4_acc.png", argv[2]);
+        int r = sheet_lineage(p, sc, lg) | sheet_faces(q, sc, lg) | sheet_adults(ap, sc, lg) | sheet_anim(np, lg) |
+                sheet_acc(cp, sc, lg);
         fclose(lg);
         if (!r) printf("%s\n%s\n%s\n", p, q, lp);
         return r;

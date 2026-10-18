@@ -73,7 +73,7 @@ static const char *const JUV0[32] = {
 };
 static const pet_mask_t JUVS[] = { {"juvenil pera", 16, 32, JUV0} };
 
-/* ---- Adulto: 40x40. Rama A "Hogareno" (bajo, ancho), rama B "Explorador" (alto, alas). ---- */
+/* ---- Adulto: 40x40. Ramas: "Hogareno" (bajo, ancho), "Saltarin" (alto, alas), "Sabio", "Forzudo". ---- */
 static const char *const ADU0[40] = {
     "....................",
     "....................",
@@ -158,10 +158,99 @@ static const char *const ADU1[40] = {
     "....................",
     "....................",
 };
-static const pet_mask_t ADULTS[] = { {"adulto hogareno", 20, 40, ADU0}, {"adulto explorador", 20, 40, ADU1} };
+/* Rama "Sabio": cabezon sobre un cuerpo pequeno. */
+static const char *const ADU2[40] = {
+    "....................",
+    "....................",
+    "....................",
+    "....................",
+    "....................",
+    "...................G",
+    "..............BBBBBB",
+    "..........F.BBBBBBBB",
+    "..........BBBBBBBBBB",
+    ".........BBBBBBBBBBB",
+    "........BBBBBBBBBBBB",
+    ".......BBBBBBBBBBBBB",
+    ".......BBBBBBBBBBBBB",
+    "......BBBBBBBBBBBBBB",
+    "......BBBBBBBBBBBBBB",
+    "......BBBBBEBBBBBBBB",
+    "......BBBBBBBBBBBBBB",
+    "......BBBBBBBBBBBBBB",
+    "......BBBBBBBBBBBBBB",
+    "......BBBBBBBBBBBBBB",
+    ".......BBBBBBBBBBBBM",
+    ".......BBBBBBBBBBBBB",
+    "........BBBBBBBBBBBB",
+    ".........BBBBBBBBBBB",
+    "...........BBBBBBBBB",
+    "............BBBBBBBB",
+    "...........BBBBBBBBB",
+    "..........BBBBBBBBBB",
+    "........BBBBBBBBBBBB",
+    "........BBB.BBBBBBBB",
+    "..........BBBBBBBBBB",
+    "..........BBBBBBBBBB",
+    "..........BBBBBBBBBB",
+    "..........BBBBBBBBBB",
+    "...........BBBBBBBBB",
+    "............BBBBBBBB",
+    "..........BBBBB.....",
+    "..........BBBBB.....",
+    "....................",
+    "....................",
+};
+/* Rama "Forzudo": cabeza pequena, hombros anchos y brazos. */
+static const char *const ADU3[40] = {
+    "....................",
+    "....................",
+    "....................",
+    "....................",
+    "....................",
+    "....................",
+    "....................",
+    "....................",
+    "...................G",
+    "..............BBBBBB",
+    "............F.BBBBBB",
+    "............BBBBBBBB",
+    "...........BBBBBBBBB",
+    "...........BBBBBBBBB",
+    "...........BEBBBBBBB",
+    "...........BBBBBBBBB",
+    "...........BBBBBBBBM",
+    "............BBBBBBBB",
+    "...BBBBBBBBBBBBBBBBB",
+    "..BBBBBBBBBBBBBBBBBB",
+    ".BBBBBBBBBBBBBBBBBBB",
+    ".BBBB.BBBBBBBBBBBBBB",
+    ".BBBB.BBBBBBBBBBBBBB",
+    ".BBBB..BBBBBBBBBBBBB",
+    ".BBBB..BBBBBBBBBBBBB",
+    "..BBB..BBBBBBBBBBBBB",
+    "..BBB..BBBBBBBBBBBBB",
+    ".BBBB...BBBBBBBBBBBB",
+    ".BBBB...BBBBBBBBBBBB",
+    "..BB....BBBBBBBBBBBB",
+    "........BBBBBBBBBBBB",
+    "........BBBBBBBBBBBB",
+    ".........BBBBBBBBBBB",
+    ".........BBBBBBBBBBB",
+    "..........BBBBBBBBBB",
+    "...........BBBBBBBBB",
+    "........BBBBBB......",
+    "........BBBBBB......",
+    "....................",
+    "....................",
+};
+static const pet_mask_t ADULTS[] = {
+    {"adulto hogareno", 20, 40, ADU0}, {"adulto saltarin", 20, 40, ADU1},
+    {"adulto sabio", 20, 40, ADU2}, {"adulto forzudo", 20, 40, ADU3},
+};
 
 const pet_mask_t *const PET_MASKS[4] = { EGGS, BABIES, JUVS, ADULTS };
-const int PET_MASK_COUNT[4] = { 3, 1, 1, 2 };
+const int PET_MASK_COUNT[4] = { 3, 1, 1, 4 };
 
 /* ---- Piezas ---- */
 static const char *const EAR0[] = {"B..", "BB.", "BB.", "BBB"};

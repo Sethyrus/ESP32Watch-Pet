@@ -1,9 +1,9 @@
 # Simulador PC (sin SDL todavia). `make` -> build/sim ; `make check` ; `make sheets`
 CC ?= cc
-CFLAGS = -std=c99 -O1 -Wall -Wextra -I../../components/pet_render/include
-SRC = sim.c png.c ../../components/pet_render/pet_render.c ../../components/pet_render/pet_anim.c ../../components/pet_render/pet_masks.c
+CFLAGS = -std=c99 -O1 -Wall -Wextra -Wno-missing-field-initializers -I../../components/pet_render/include -I../../components/pet_core/include -I../../components/pet_game/include
+SRC = sim.c png.c $(wildcard ../../components/pet_render/*.c) $(wildcard ../../components/pet_core/*.c) ../../components/pet_game/pet_game.c
 
-build/sim: $(SRC) png.h ../../components/pet_render/include/pet_render.h ../../components/pet_render/pet_masks.h
+build/sim: $(SRC) png.h $(wildcard ../../components/*/include/*.h) ../../components/pet_render/pet_masks.h
 	@mkdir -p build
 	$(CC) $(CFLAGS) $(SRC) -o $@ -lm
 

@@ -1,6 +1,6 @@
 # Capability Map: ESP32Watch-Pet
 
-Estado: **lista para arrancar.** Módulos, orden de construcción y puertas de salida de cada fase. Detalle en `PET_DESIGN.md` (producto), `PET_TECH.md` (técnica) y `STYLEGUIDE.md` (arte).
+Estado: **fase 3 (juego v2) en curso.** Módulos, orden de construcción y puertas de salida de cada fase. Detalle en `PET_DESIGN.md` (producto), `PET_TECH.md` (técnica) y `STYLEGUIDE.md` (arte).
 
 ## Módulos
 
@@ -44,5 +44,17 @@ Orden:
 7. Alta en el Launcher y trabajo entre repositorios (`PET_TECH.md`, sección 9). **Hecho:** `apps.conf`, `KNOWN[]`, tablas y GOTCHAS de core, grabada con `flash_all.sh pet` y `launcher`; `ota_4` borrado; `check_apps.sh` sin avisos.
 - **Salida:** MVP jugable en el reloj; medidas de consumo documentadas en core `docs/`.
 
+### Fase 3: juego v2 (R16–R21) — en curso desde el 2026-10-18
+
+| # | Paso | Estado |
+| --- | --- | --- |
+| 1 | Motor v3 (`pet_core`): necesidades, monedas, cacas, malito, deseos, nivel, ramas por entrenamiento, generaciones; partida v3 con migración | **Hecho.** B1–B9 en verde con bots. |
+| 2 | Minijuegos (`pet_game`): Atrapa, Memoria, Pesas | **Hecho.** B10 en verde. |
+| 3 | Arte: adultos Sabio y Forzudo, accesorios, iconos, escena (`pet_gfx`, `pet_scene`) | **Hecho.** Hojas en `make -C tools/sim sheets` y `build/sim scenes`. |
+| 4 | Interfaz v2 y simulador `tools/uisim` | **Hecho.** Recorrido completo en `make -C tools/uisim shots`. |
+| 5 | En el reloj | **Instalado en `ota_5`** el 2026-10-18. Arranca, migra la partida real (pasa a juvenil, nivel 4), escanea y guarda. **Pendiente:** prueba de sensación del usuario: tacto de los juegos, fluidez y claridad. |
+| 6 | Siguiente tanda | Sonido (R3), fondos de escena, más accesorios y juegos, IMU en Atrapa (pide apagar `imu_service` en core), standalone en `factory`. |
+
 ## Fuera del MVP
-BLE y eje WiFi/BLE, Señalpedia, herencia, minijuegos, voz, social, esfera del Launcher, despertar al levantar la muñeca.
+
+BLE y eje WiFi/BLE, voz, social, esfera del Launcher, despertar al levantar la muñeca.

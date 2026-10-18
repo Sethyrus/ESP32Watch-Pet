@@ -1,221 +1,234 @@
-# Pet Design: especificación de producto
+# Pet Design v2: especificación de producto
 
-Estado: **lista para arrancar** (decisiones en `DECISIONS.md`). Sustituye al stub anterior y a `SPEC-pet.md`. Los números son **valores iniciales propuestos**, a validar con el simulador headless en la fase 1 (se marcan como *inicial*). Lo técnico está en `PET_TECH.md`, el arte en `STYLEGUIDE.md`, las decisiones pendientes en `DECISIONS.md`, y el porqué de cada mecánica en `RESEARCH.md`.
+Estado: **v2 en desarrollo** (2026-10-18). Sustituye al diseño v1 (en el historial de git), que resultó simple, poco claro y dependiente de llevar el reloj encima: el WiFi era la única fuente de comida y nada de lo que hacía el jugador quitaba el aburrimiento. Las decisiones están en `DECISIONS.md` (R16 en adelante); lo técnico, en `PET_TECH.md`; el arte, en `STYLEGUIDE.md`. Los números son iniciales y se calibran con los bots de `tests/` (sección 13).
 
-## 1. Objetivo
+## 1. Pilares
 
-Una mascota virtual para el reloj que **se alimenta de las señales WiFi de su entorno**, evoluciona según su dieta y los cuidados, y **nunca muere**. En casa tiene una dieta estable pero repetitiva; al salir con el reloj descubre señales nuevas, y cómo es esa dieta a lo largo de su vida decide en qué se convierte.
+1. **Cada visita tiene algo que hacer** (de 30 s a 2 min) y una recompensa visible: monedas, experiencia, una reacción.
+2. **Se juega con la criatura**, no se la mira: minijuegos protagonizados por ella y gestos directos (acariciar, limpiar, darle de comer).
+3. **Cada necesidad tiene una acción clara que la arregla** y un icono que dice qué pide.
+4. **Progresión visible:** nivel, monedas, evolución con pistas, álbum de formas, accesorios.
+5. **Se puede jugar entera en casa.** El WiFi añade extras y colección, nunca es obligatorio.
+6. **Indulgente:** nunca muere; el descuido solo ralentiza y cambia la variante adulta.
 
-Principios (decididos):
-1. **Indulgente.** El descuido solo ralentiza el crecimiento, empeora el ánimo y orienta hacia formas torpes o raras, igual de simpáticas. Nada es irreversible.
-2. **Crecimiento impulsado por el entorno.** La dieta de señales es el eje principal.
-3. **Uso mixto** muñeca y mesa, con modos que el dispositivo detecta solo.
-4. **Arte 100 % por código** (ver `STYLEGUIDE.md`).
-5. **Evolución visible:** la criatura cambia de forma entre etapas y según la rama.
+## 2. Bucle
 
-## 2. Alcance
-
-### MVP (primera versión jugable)
-- Una especie: huevo → cría → juvenil → adulto, con **dos adultos** según el eje de novedad.
-- **Solo WiFi pasivo.** Despensa con bocados doméstico, exótico y urbano.
-- Alimentación manual, caricia, ciclo de sueño con RTC, detección de modo mesa/muñeca, cara expresiva, partida persistente y versionada.
-- Dos formas de instalarla: standalone o como app del Launcher (ver `PET_TECH.md`, sección 2).
-
-### Fuera del MVP
-BLE y eje WiFi/BLE completo, Señalpedia, herencia generacional, minijuegos, voz, componente social entre dispositivos, integración como esfera del Launcher, despertar al levantar la muñeca (ver 8).
-
-## 3. Bucle principal
-
-```
-escaneo WiFi → bocados → DESPENSA → (jugador elige / picoteo autónomo) → mascota
-                                         │
-                      saciedad · ánimo · energía · puntos de crecimiento
-                                         ↓
-                       etapa (edad + puntos) y rama (dieta + cuidado)
+```text
+visita ─► mira la burbuja (qué pide) ─► cuida: comer · asear · dormir · caricias
+   │                                          │
+   └► minijuego (diversión + monedas + entrenamiento) ◄┘
+                │
+     monedas ─► comida, medicina, accesorios
+     experiencia ─► nivel ─► evolución (edad + nivel)
+     entrenamiento ─► rama del adulto      cuidado ─► variante del adulto
+     WiFi (de fondo) ─► señales: monedas, chuches, accesorios, álbum
 ```
 
-## 4. Modelo de estadísticas
+Largo plazo: adulto ─► **nueva generación** (huevo nuevo; se conservan monedas, accesorios, señales y álbum) ─► completar el álbum de formas.
 
-Tres capas, definidas por **magnitud de cambio** y no por temporizadores separados (Catode32). Valores 0–100 salvo que se diga otra cosa.
+## 3. Necesidades
 
-| Capa | Estadística | Comportamiento (*inicial*) |
+Cuatro barras de 0 a 100, siempre visibles con su icono bajo la hora.
+
+| Necesidad | Baja (despierta) | Se arregla con |
 | --- | --- | --- |
-| Rápida | **Saciedad** | Baja ~8/h con la mascota despierta (de 100 a 0 en ~12 h). De noche, ×0,25. Sube al comer. |
-| Rápida | **Energía** | Baja ~5/h despierta; sube ~12/h dormida. Con < 20 la mascota busca dormir. |
-| Media | **Ánimo** | Baja ~2/h. Sube con caricias y comida (ver 6). Con saciedad < 25 baja el doble. |
-| Media | **Despensa** | Capacidad 20 bocados; caducidad por tipo (ver 5). |
-| Lenta | **Puntos de crecimiento (PC)** | Acumulados por comida y por días de visita (ver 7). |
-| Lenta | **Eje de dieta** | `exóticos comidos / (exóticos + domésticos comidos)` durante cría y juvenil. |
-| Lenta | **Errores de cuidado** | Contador por etapa; se reinicia en cada evolución (ver 7). |
-| Lenta | **Fracción manual** | Bocados dados por el jugador / total comidos, en la etapa. |
-| Personalidad | **Rasgos** (curiosidad, calma, glotonería, 0–9) | Sembrados al nacer; sesgan decisiones y la apariencia. |
+| **Comida** | 9/h; de noche ×0,25 | Comer (sección 4) |
+| **Diversión** | 8/h; de noche, nada | Jugar (minijuegos), caricias (poco), pastel, deseos |
+| **Higiene** | 3/h + 6/h por cada caca en el suelo; de noche 1/h | Asear (quita las cacas y baña) o tocar cada caca |
+| **Energía** | 4/h; −8 por minijuego | Dormir: de noche siempre; de día, siesta de 30 min |
 
-**Amortiguación** (Catode32): toda ganancia se multiplica por `((100−v)/100)^0,7` y toda pérdida **por evento** (p. ej. sacudidas) por `(v/100)^0,7`; por debajo de 25, las ganancias valen hasta ×3, para que recuperarse sea fácil. El descenso **pasivo** (8/h, 5/h, 2/h) es lineal: amortiguarlo hacía que la saciedad casi nunca llegara a ≤ 5 y los errores de cuidado fueran inalcanzables.
+- **Cacas:** la comida llena la tripa; con la tripa ≥ 60 y ≥ 90 min desde la última, sale una caca (máximo 4). Más o menos una caca cada dos comidas. Tocar una la limpia: +1 moneda, +2 de higiene, +2 XP.
+- **Malito:** con higiene ≤ 10 o ≥ 3 cacas durante 60 min activos se pone malito. Malito: las ganancias de comida y diversión valen la mitad, la energía baja ×1,5 y no puede jugar. Se cura con **Medicina** o solo a las 12 h. Cuenta un error de cuidado.
+- **Error de cuidado:** comida, diversión o higiene ≤ 5 durante 30 min activos (o malito). Ausencias: como v1, máximo 1 error por cada 12 h y 2 por ausencia.
+- **Ánimo** (la cara) se deriva de las necesidades: su media, con suelo en la peor. Ya no es una barra propia.
 
-## 5. Despensa y bocados
+**Burbuja:** sobre la criatura aparece el icono de lo que más necesita, por este orden: malito (medicina) → comida < 25 → higiene < 25 o ≥ 2 cacas (jabón) → energía < 20 (luna) → diversión < 25 (pelota) → deseo activo (estrella con su icono). Tocar la burbuja abre lo que arregla eso.
 
-Cada escaneo no alimenta directamente: **llena la despensa**.
+## 4. Monedas y comida
 
-| Bocado | Origen | Sabor | Caducidad (*inicial*) |
-| --- | --- | --- | --- |
-| Doméstico | AP familiar visible | básico | 24 h |
-| Exótico | AP nuevo | novedad | 48 h |
-| Urbano | ≥ 15 redes o ≥ 3 abiertas en un escaneo (enfriamiento 30 min) | "ciudad" | 36 h |
-| Social (BLE) | fase posterior | "social" | — |
+Monedas (●). Se empieza con 20.
 
-**Familiaridad por BSSID** (Catode32): tabla de 32 familiares + 32 recientes, indexada por hash con sal del dispositivo (nunca BSSID ni SSID en claro). Por cada escaneo: +1 si visto, −0,25 si no, se elimina a ≤ 0, pasa a familiar con ≥ 5. Un AP es **nuevo** si no está en ninguna tabla.
-
-**Época de familiaridad:** las puntuaciones solo se actualizan si han pasado ≥ 20 min desde la última época (así el modo mesa, con escaneos cada minuto, no convierte un AP en familiar en 5 minutos). Los domésticos solo se generan en una época; los exóticos en cualquier escaneo, porque un AP solo es «nuevo» la primera vez que entra en la tabla.
-
-**Bocados por escaneo** (*inicial*): domésticos `min(2, familiares visibles)` (solo en época); exóticos `min(3, nuevos)`; urbano 0 o 1. **Tope diario de novedad:** 12 exóticos por día (evita el "farmeo" paseando junto a un bloque de pisos).
-
-Si la despensa está llena se descarta primero el bocado más antiguo de tipo doméstico.
-
-**Alimentar:** el jugador elige el tipo desde la despensa (decisión principal). Efecto de comer (*inicial*, antes de amortiguación):
-
-| Bocado | Saciedad | Ánimo | PC |
-| --- | --- | --- | --- |
-| Doméstico | +12 | +1 | +1 |
-| Exótico | +8 | +8 | +4 |
-| Urbano | +10 | +4 | +3 |
-
-**Picoteo autónomo:** si la saciedad < 30 y el jugador no actúa en 5 min, la mascota come el bocado más antiguo (de cualquier tipo, una vez cada 5 min) con **60 % de aprovechamiento** (saciedad, ánimo y PC × 0,6) y sin contar como bocado manual. Lo que come solo **cuenta para la dieta**: la dieta depende del entorno (qué bocados llegan) y el jugador la sesga eligiendo qué dar. «Picotear» no es un comportamiento del motor de decisión sino esta regla, que avisa a la UI con un evento.
-
-## 6. Ánimo, expresión y reacciones
-
-**Escalera de ánimo** (TamaFi; gana la primera que cumpla): dormida → hambrienta (saciedad < 25) → cansada (energía < 20) → triste (ánimo < 40) → aburrida (sin señal nueva, comida ni caricia en 2 h estando despierta) → curiosa (señal nueva en el último escaneo) → feliz (ánimo ≥ 70) → calma.
-
-**Reacciones** (con la pantalla encendida; ideas de Lumo/RoboEyes, código propio):
-
-| Disparador | Reacción | Efecto |
-| --- | --- | --- |
-| Toque | feliz 2,5 s | ánimo +2 (máx. +10/h con amortiguación) |
-| ≥ 4 toques en 1,5 s | mareo/enfado 3 s | sin ganancia mientras dure |
-| Sacudida | sorpresa 2 s | sin ganancia; > 3 sacudidas por minuto: ánimo −1 |
-| Levantar el reloj (IMU, pantalla ya encendida) | saludo | — |
-| USB enchufado / desenchufado | ojos de corazón / puchero | solo estético |
-| Batería ≤ 20 % | cara de sueño por defecto | solo estético |
-
-**Motor de decisión** (cada 8–15 s en la escena; TamaFi + Catode32): cada comportamiento pasa una puerta, calcula un deseo (necesidad + rasgo/2 + bono de ánimo + azar), se resta la penalización por recencia `50 − 10·posición` (últimos 5), y se elige al azar dentro del mejor bin de 10. Comportamientos del MVP: reposar, curiosear, jugar/botar, pedir atención, mirar alrededor, picotear, dormir.
-
-## 7. Evolución
-
-### Etapas (ciclo objetivo ≈ 7 días)
-
-| Etapa | Entra cuando (*inicial*) |
+| Gana | Cuánto |
 | --- | --- |
-| Huevo | al instalar; eclosiona tras 10 min de uso activo |
-| Cría | tras eclosionar |
-| Juvenil | edad ≥ 36 h **y** PC ≥ 40 (edad contada **desde la instalación**) |
-| Adulto | edad ≥ 6 días **y** PC ≥ 200 (PC totales de la vida, no se reinician) |
+| Minijuego | 2–15 según la puntuación |
+| Deseo cumplido | 5 + nivel (máx. 20) |
+| Primera visita del día | 5 + 2 por día de racha (máx. +10) |
+| Limpiar una caca | 1 |
+| Subir de nivel | 10 |
+| Señales WiFi nuevas | 1 por señal (máx. 15/día) |
 
-**Plazo máximo** (para que nada se quede atascado), también desde la instalación: a los **7 días** pasa a juvenil y a los **14 días** a adulto aunque falten PC.
+**Comer** muestra la carta: tocar un plato lo compra y se lo da en un solo gesto. Las chuches de señal (WiFi) y la medicina comprada se guardan en el inventario.
 
-### Puntos de crecimiento
-- Comida: +PC según la tabla de 5 (doméstico +1, exótico +4, urbano +3), con **tope de 50 PC/día** por comida.
-- **Visita diaria:** +10 PC por cada día con al menos una interacción o bocado.
-- Máximo ≈ 60 PC/día: un jugador activo llega a adulto en ~6–7 días; uno casual, en ~10; quien solo hace una visita al día en casa, en ~14 (por el plazo máximo).
+| Plato | Precio | Comida | Diversión | XP | Tripa |
+| --- | --- | --- | --- | --- | --- |
+| Pan | 3 | +25 | 0 | 2 | 30 |
+| Fruta | 5 | +15 | +5 | 3 | 15 |
+| Guiso | 8 | +45 | +5 | 4 | 45 |
+| Pastel | 10 | +10 | +25 (la mitad si ya comió pastel hoy) | 4 | 25 |
+| Chuche de señal | solo WiFi | +20 | +15 | 15 | 20 |
+| Medicina | 20 | cura el malito | — | 2 | 0 |
 
-### Rama del adulto (MVP: dos adultos)
-- **Eje de dieta:** los urbanos cuentan como exóticos; se cuenta durante cría y juvenil y deja de contar al ser adulto.
-- **Adulto A «Hogareño»:** eje de dieta < 0,30.
-- **Adulto B «Explorador»:** eje de dieta ≥ 0,30.
-- La **calidad de cuidado** no cambia la rama, cambia la **variante** (mismo cuerpo, parámetros distintos):
-  - **Pulida:** ≤ 2 errores en juvenil y ánimo medio ≥ 60.
-  - **Torpe:** ≥ 4 errores en juvenil.
-  - **Rara:** ánimo medio < 40.
-  - Normal: el resto.
-- Ejes posteriores (WiFi/BLE) añadirán ramas sin tocar estas.
+- **Plato favorito** (uno de los cuatro, fijado por la semilla): +10 de diversión y +2 XP extra, con cara de amor. Se descubre al probarlo y queda en el álbum.
+- Con comida ≥ 95 no quiere comer («Está lleno»). De noche duerme y no come.
 
-### Error de cuidado
-Una necesidad (saciedad o ánimo ≤ 5) que **sigue así 15 minutos de tiempo activo** sin respuesta del jugador cuenta 1 error (ventana de atención del Tamagotchi P1). Con la app cerrada o el reloj apagado (ausencia): **máximo 1 error por cada 12 h de ausencia y 2 por ausencia.** Los errores se reinician en cada evolución (Digimon).
+## 5. Minijuegos
 
-## 8. Tiempo, sueño y ausencia
+Duran de 20 a 40 s, se juegan con el dedo y la criatura es la protagonista. Cuestan 8 de energía y no se puede jugar con menos de 10 de energía, malito o de noche. Rendimiento 0–100 por partida:
 
-- **Noche** (RTC, hora local, sin zona horaria): 23:00–08:00 por defecto, ajustable. De noche no se escanea ni se come; si se enciende la pantalla (con botón) la mascota se muestra adormilada 10 s, sin penalización.
-- **Tiempo ausente:** al arrancar se ejecuta **un único paso** que simula el hueco `dt = ahora − última marca` (tope 7 días; si el RTC perdió la hora, `dt = 0` y se avisa). Reglas (*inicial*):
-  1. La despensa envejece y caduca.
-  2. La mascota picotea de la despensa (aprovechamiento 50 %) por tramos de 1 h.
-  3. La saciedad baja a ×0,35 con **suelo en 15**; el ánimo baja 1/h con **suelo en 35**; la energía se repone de noche.
-  4. Errores de cuidado según la regla de ausencia.
-  5. No hay PC de visita diaria sin interacción.
-  - Resultado: una mascota hambrienta, pidiendo comida y algo triste; nunca peor que eso.
-- **Despertar al levantar la muñeca:** depende de la interrupción del QMI8658 (GPIO21, sin validar en core) y de despertar la pantalla por táctil/IMU, que el Launcher evita. En el MVP se despierta con **botones**; la reacción de saludo funciona solo con la pantalla ya encendida.
+- Diversión: +15 + 25 × rendimiento/100.
+- XP: 10 + rendimiento/10.
+- Monedas: 2 + 13 × rendimiento/100.
+- Entrenamiento de su atributo: 2 + rendimiento/10.
 
-## 9. Modos de uso
+| Juego | Atributo | Desde | Mecánica |
+| --- | --- | --- | --- |
+| **Atrapa** | Agilidad | nivel 1 | 30 s. La criatura sigue al dedo por abajo; caen comida (+1), estrellas (+3) y rayos (−2 y aturde 0,6 s). La velocidad sube con el tiempo. |
+| **Memoria** | Ingenio | nivel 1 | Cuatro botones de colores. La criatura enseña una secuencia que crece desde 3 y hay que repetirla. Termina al fallar o al llegar a 10. |
+| **Pesas** | Fuerza | nivel 2 | Tocar rápido para levantar la pesa antes de que se caiga; 5 pesas cada vez más pesadas, 6 s cada una. |
 
-| | Mesa | Muñeca |
+Al terminar, una tarjeta con la puntuación, el récord y lo ganado, y los botones «Otra vez» y «Salir».
+
+## 6. Deseos
+
+Cada 60–150 min despierta, la criatura pide algo concreto durante 2 h: un plato, un juego, caricias (3), que la asees (solo si hay cacas o higiene < 60) o ver una señal nueva (solo si ha visto alguna en los últimos 3 días). Cumplirlo da monedas, 15 XP y +10 de diversión. Si caduca no pasa nada. El primer deseo llega 10 min después de nacer.
+
+## 7. Progresión
+
+### Nivel
+
+XP de todo lo que se hace (tablas de arriba, más caricias +1 hasta 5/h, asear +3, visita diaria +10, señal nueva +1). Para pasar del nivel n al n+1 hacen falta 40 × n XP. El nivel desbloquea juegos y accesorios de la tienda.
+
+### Evolución
+
+| Etapa | Entra cuando |
+| --- | --- |
+| Huevo | al empezar; eclosiona tras 2 min con la pantalla encendida (se agrieta antes) |
+| Cría | al eclosionar |
+| Juvenil | nivel ≥ 3 y edad ≥ 12 h (forzado a los 3 días) |
+| Adulto | nivel ≥ 6 y edad ≥ 3 días (forzado a los 10 días) |
+
+**Rama del adulto = lo que más ha entrenado** de cría y juvenil:
+
+- Agilidad → **Saltarín** (el antiguo «Explorador»).
+- Ingenio → **Sabio** (cabezón, con antena).
+- Fuerza → **Forzudo** (ancho, con brazos).
+- Si apenas ha jugado (entrenamiento total < 25) → **Hogareño**.
+
+**Variante = cómo se le ha cuidado de juvenil:** Pulido (≤ 1 error y ánimo medio ≥ 52), Torpe (≥ 4 errores), Raro (ánimo medio < 30), Normal (el resto). Con los bots: el jugador activo saca Pulido, el casual Normal y el abandono Raro. Cuatro ramas por cuatro variantes dan **16 formas** para el álbum.
+
+### Generaciones y álbum
+
+Con el adulto de ≥ 3 días, «Nueva generación»: el adulto se va de viaje (nunca muere) y deja un huevo con otra semilla. Se conservan monedas, accesorios, señales y álbum. El **álbum** guarda las formas conseguidas (siluetas para las que faltan), los platos probados y los récords.
+
+### Accesorios
+
+Se compran en la Tienda (Más → Tienda) o se ganan con señales, y se ponen o quitan en el Armario; solo uno a la vez. Se dibujan por código sobre la cabeza.
+
+| Accesorio | Precio | Desde |
 | --- | --- | --- |
-| Detección | USB conectado (`watch_battery_t.usb`) **y** reloj quieto ≥ 60 s por IMU, con histéresis | todo lo demás |
-| Escaneo WiFi | cada ~60 s *(a confirmar)* | cada 10–15 min o tras movimiento sostenido *(a fijar tras medir)* |
-| Pantalla | escena completa con animaciones ricas; opción de modo atenuado con desplazamiento de píxeles | apagada por defecto; se enciende por botón; vuelve a apagarse por inactividad |
-| Contra el quemado | desplazamiento de píxeles, sin elementos estáticos más de ~60 s | n/a |
+| Lazo | 60 | nivel 2 |
+| Flor | 80 | nivel 3 |
+| Gorro | 110 | nivel 4 |
+| Gafas | 150 | nivel 5 |
+| Chistera | 220 | nivel 7 |
+| Corona | 400 | nivel 10 |
+| Radar | — | 30 señales |
+| Salacot | — | 100 señales |
 
-**Al encender la pantalla en muñeca** (por botón) se ven la hora y la mascota, más **avisos de despensa**: bocados a punto de caducar, despensa llena o señal exótica nueva sin comer. Los avisos son visuales (icono sobre el HUD), sin sonido de noche.
+## 8. WiFi: el olfato
 
-La **duración de batería en muñeca es requisito de primer nivel**: las frecuencias de escaneo no se fijan hasta medir (fase 2, prueba inicial).
+El WiFi pasa de ser la comida a ser **exploración opcional**. Mientras la app está activa (también con la pantalla apagada), la criatura «olfatea» las redes de alrededor; v1 seguía igual en pasivo, con hashes con sal y sin SSID.
+
+- Cada **señal nueva** (red nunca vista, con la tabla de familiares de v1) suma al contador de señales de por vida y da +1 moneda y +1 XP (máximo 15 al día). Cada una tiene 1/6 de dejar una **chuche de señal**.
+- Un escaneo con muchas redes (≥ 15, o ≥ 3 abiertas) da una chuche extra (enfriamiento 30 min).
+- **Hitos de señales:**
+  - 10 → 25 monedas.
+  - 30 → Radar.
+  - 60 → 3 chuches.
+  - 100 → Salacot.
+  - 200 → 100 monedas.
+- En casa las redes son siempre las mismas: apenas da nada, y no hace falta.
+
+## 9. Interacción en la escena
+
+- La criatura **pasea**, salta, mira y se sienta sola; si necesita algo se para mirando al jugador con la burbuja.
+- **Tocarla** = caricia: corazones, +3 de diversión (hasta 15/h). Cuatro toques seguidos la marean.
+- **Tocar una caca** la limpia con un destello.
+- **Tocar la burbuja** = atajo a lo que pide.
+- Reacciones a la carga USB (amor) y a la batería baja, como v1.
+- **Siesta:** la criatura duerme 30 min, la energía sube +40 y se puede despertar tocándola.
 
 ## 10. Interfaz
 
-Pantalla vertical 410×502 con esquinas redondeadas (~100 px de radio, según pocket-tank): nada importante en las esquinas.
-
+```text
+┌──────────────────────────────┐
+│            HH:MM             │  hora
+│  ⚡80%      Nv 3      ● 125   │  batería, nivel, monedas
+│  🍖▓▓▓  🎾▓▓░  🫧▓▓▓  🌙▓░░   │  4 necesidades
+│                              │
+│   ESCENA 400×280 (criatura   │
+│   paseando, cacas, burbuja)  │
+│                              │
+│ [Comer][Jugar][Asear][Dormir][Más] │  bandeja con iconos
+│        ▓▓▓▓▓▓░░░ XP          │  barra de experiencia
+└──────────────────────────────┘
 ```
-┌────────────────────────┐  y=0
-│   [batería]  HH:MM  [despensa N]   │  HUD ~70 px
-│                        │
-│         ESCENA         │  criatura centrada
-│   (criatura, comida)   │  (escala entera, ver PET_TECH)
-│                        │
-├────────────────────────┤
-│  [Alimentar][Estado][⚙] │  bandeja ~120 px
-└────────────────────────┘  y=502
-```
 
-- **Toque en la criatura:** caricia. **Deslizar arriba:** despensa. **Deslizar abajo:** estado (barras de saciedad, ánimo, energía; etapa y edad).
-- **Despensa:** lista de bocados por tipo con cantidad y tiempo hasta caducar; tocar uno lo da a la mascota.
-- **BOOT** = aceptar/acción principal (abre la despensa; confirma). **PWR corto** = atrás/menú; en la raíz y en modo app, vuelve al Launcher (convención de core, `ARCHITECTURE.md`, "Convencion De Botones").
-- **Ajustes:** noche (inicio y fin), sonido, brillo, reiniciar mascota (con confirmación).
-- Widgets con LVGL y escena de la criatura como imagen generada por `pet_render` (`DECISIONS.md`, T5).
+- **Más:** Estado (necesidades con números, edad, atributos, pistas de evolución), Tienda, Armario, Álbum y Ajustes (noche, velocidad del tiempo de prueba, reiniciar).
+- **Gestos:** deslizar hacia arriba abre Comer y hacia abajo, Estado.
+- **Botones:** BOOT abre Comer (o «Otra vez» en un juego). PWR vuelve atrás: desde la raíz, al Launcher o, en standalone, apaga la pantalla.
+- Avisos y recompensas en un rótulo sobre la escena («+8 ●», «¡Nivel 4!», «Ha evolucionado»).
 
-## 11. Sonido
-Pitidos y melodías cortas de onda cuadrada o triangular generadas en C (sin WAV), para: señal nueva descubierta, caricia, llamada de hambre. **Silenciable** y apagado de noche. Es lo último de la fase 2 y se recorta si complica el consumo (`DECISIONS.md`, R3).
+## 11. Tiempo, sueño y ausencia
 
-## 12. Privacidad y datos
-- Solo escaneo **pasivo**: nunca conectarse ni interactuar con redes ajenas.
-- Solo **hashes con sal** del BSSID; nunca SSID ni MAC en claro en almacenamiento persistente, ni en logs.
-- Partida versionada, con CRC y resistente a cortes (ver `PET_TECH.md`).
+- **Noche** (23–08 por defecto, ajustable): duerme; no come ni juega; no hay escaneos.
+- **Pantalla apagada = ausencia.** El reloj pasa casi todo el día con la pantalla apagada y el motor solo avanza con ella encendida; al encenderla se simula el hueco de una vez. Por eso los ritmos «despierta» de la sección 3 solo valen mientras se mira, y el ritmo real del día lo marca la ausencia: comida al 60 %, diversión e higiene al 50 %.
+- **Ausencia** (un paso al volver, con tope de 7 días):
+  - Suelos de comida 15, diversión 20 e higiene 10.
+  - Como mucho 3 cacas.
+  - La energía se repone de noche.
+  - No enferma estando ausente.
+  - Errores de cuidado como en v1.
+  - Nunca peor que «con hambre, aburrido y sucio».
 
-## 13. Criterios de aceptación (verificables en el simulador headless, fase 1)
+## 12. Privacidad
+
+Igual que v1: escaneo pasivo y solo hashes con sal; nunca SSID ni MAC.
+
+## 13. Cómo se prueba (R17)
+
+El desarrollo no depende de llevar el reloj durante días:
+
+1. **Bots de jugador** en `tests/`: simulan semanas en segundos con perfiles (activo, casual, solo en casa, abandono) y comprueban los criterios de abajo.
+2. **Minijuegos deterministas** con bots que juegan bien, regular o al azar: puntuaciones en rango y dificultad creciente.
+3. **Simulador de PC** (`tools/uisim`): la interfaz real con LVGL. Por guion saca capturas PNG que el agente revisa; también tiene un modo interactivo con ratón.
+4. **Velocidad del tiempo** en Ajustes (×1, ×10, ×60) para ver un ciclo de vida en el reloj en horas, no en días.
+5. **En el reloj, pruebas cortas** (5–10 min) solo de lo que no se puede simular: tacto, fluidez y sensación. El consumo se lee del diario horario (R14) sin pruebas dedicadas.
+
+## 14. Criterios de aceptación
 
 | # | Criterio |
 | --- | --- |
-| A1 | Con dieta ≥ 60 % exótica durante juvenil, el adulto es B «Explorador» en el 100 % de 1.000 semillas; con dieta 0 % exótica, A «Hogareño» en el 100 %. |
-| A2 | Un jugador activo (tres visitas al día, alimentando) llega a adulto entre los días 6 y 8; uno que solo hace una visita al día, no más tarde del día 14. |
-| A3 | En una ausencia de 7 días, saciedad ≥ 15, ánimo ≥ 35 y errores añadidos ≤ 2 (suelos del apartado 8). |
-| A4 | Los errores de cuidado nunca bajan de 0 ni se acumulan entre etapas; se reinician al evolucionar. |
-| A5 | Ningún valor de la partida puede dejar a la mascota «muerta»: no existe ese estado. |
-| A6 | No más de 12 bocados exóticos por día, aunque haya 100 AP nuevos. |
-| A7 | El mismo escenario y la misma semilla producen exactamente el mismo resultado (determinismo). |
-| A8 | Cargar una partida de la versión N−1 produce una partida válida (migración). Un guardado truncado se rechaza y se usa la copia anterior. |
-| A9 | Ningún BSSID ni SSID en claro aparece en la partida serializada. |
-| A10 | La rama no cambia con las variantes de cuidado: cambia solo la variante. |
+| B1 | Jugador activo (3 visitas/día con juegos): juvenil el día 1–2, adulto el día 4–5. Casual (1 visita/día): adulto el día 7–10. Abandono (1 visita cada 3 días): adulto el día 10 (forzado). |
+| B2 | Solo en casa (sin señales nuevas), un jugador activo llega igual de rápido que uno que sale: el WiFi no decide el ritmo. |
+| B3 | Jugar sobre todo a un juego da su rama en ≥ 95 % de las semillas; sin jugar, Hogareño. Las 4 ramas son alcanzables. |
+| B4 | Economía: un jugador activo nunca se queda sin poder comer y al tercer día tiene para ≥ 1 accesorio (≥ 60 monedas). En 14 días gana más o menos lo que cuestan todos los accesorios. |
+| B5 | Ausencia de 7 días: comida ≥ 15, diversión ≥ 20, higiene ≥ 10, cacas ≤ 3, no enferma, errores añadidos ≤ 2. |
+| B6 | No existe estado de muerte; toda necesidad tiene una acción que la sube. |
+| B7 | Determinismo: misma semilla y mismo guion dan el mismo resultado. |
+| B8 | Migración: una partida v2 (la del reloj) carga como v3 válida, conserva edad, etapa y rama, y convierte la despensa en inventario. Un guardado truncado se rechaza. |
+| B9 | Ningún BSSID ni SSID en claro en la partida. |
+| B10 | Minijuegos: un bot perfecto saca rendimiento medio ≥ 90 (mínimo ≥ 60), uno al azar ≤ 30 de media, y ninguna partida pasa de 45 s. |
 
-### Estado (fase 1, `make -C tests test`): **A1–A10 en verde** (9.728 comprobaciones; también con ASan/UBSan)
+### Estado (`make -C tests test`, 2026-10-18)
 
-A1 se comprueba con tres escenarios sobre 1.000 semillas, porque la dieta es lo que se *come* (también el picoteo): (a) en casa y solo domésticos → Hogareño siempre (eje máximo 0,03, por los exóticos de la primera vez que se ven los AP de casa); (b) con salidas y 70 % exóticos manuales → Explorador siempre (eje mínimo 0,67); (c) con salidas y solo domésticos manuales → la rama sigue al eje exactamente (el picoteo come lo más antiguo, y con salidas casi todo es exótico).
+Todo en verde (4.964 comprobaciones del motor y 1.807 de los juegos, también con ASan/UBSan). Bots, 200 semillas por perfil:
 
-## 14. Calibración (fase 1)
+| Perfil | Juvenil | Adulto | Variante | Monedas día 3 |
+| --- | --- | --- | --- | --- |
+| Activo (3 visitas, 2 partidas) | día 1 | día 4–5 | Pulido | ≥ 186 |
+| Activo, siempre en casa | día 1 | día 4–5 | Pulido | ≥ 186 |
+| Casual (1 visita, 1 partida) | día 2–4 | día 8–11 | Normal | ≥ 48 |
+| Abandono (1 visita cada 3 días) | día 4 | día 11 (forzado) | Raro | ≥ 38 |
 
-Perfiles simulados (200–300 semillas; casa de 8 AP, trabajo de 10, calle con 14 AP nuevos por escaneo; escaneo cada 15 min de 08 a 23):
-
-| Perfil | Adulto el día | Rama |
-| --- | --- | --- |
-| Activo (3 visitas/día), con salidas | 7 (juvenil el 2) | Explorador |
-| Una visita/día, con salidas | 7 (juvenil el 3) | Explorador |
-| Activo, siempre en casa | 9–10 | Hogareño |
-| Una visita/día, siempre en casa | 11 | Hogareño |
-
-- **La rama sigue al estilo de vida:** con 0 % de días de salida todo Hogareño; con 20 %, ~35 % Explorador; con 40 %, ~80 %; con 60 % o más, casi todo Explorador. El umbral 0,30 deja el punto medio en torno a un día de cada cinco fuera de casa.
-- **Con salidas, la edad manda, no los PC** (se llega a 200 PC antes de los 6 días); en casa mandan los PC. Sin los +1 PC del doméstico, quien se quedaba en casa esperaba 14 días (el plazo máximo).
-- **Variantes:** Pulida para quien sale y juega (ánimo medio ≥ 60); Normal para el término medio; Rara para quien casi no recibe novedad ni caricias (el casual que nunca sale de casa cae siempre en Rara). **Torpe exige un abandono sostenido** (≥ 4 errores en el juvenil: ausencias de varios días repetidas); en uso normal no sale nunca. Es coherente con el tono indulgente.
-- Ausencia de 7 días: saciedad 15, ánimo 35, errores añadidos ≤ 2 (en cualquier etapa).
+Jugar sobre todo a un juego da su rama el 100 % de las veces; sin jugar, Hogareño el 100 %.
