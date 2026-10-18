@@ -2,7 +2,7 @@
 
 Mascota virtual tipo Tamagotchi para la Waveshare **ESP32-S3-Touch-AMOLED-2.06** con `ESP-IDF 5.5.4` + `LVGL 9` + BSP oficial de Waveshare.
 
-Estado: **solo especificaciones, sin codigo de juego todavia.** La mascota se alimenta de las redes WiFi de su entorno (escaneo pasivo), evoluciona segun su dieta y los cuidados, y nunca muere.
+Estado: **primera version jugable** (motor, escena, despensa, estado, ajustes, escaneo WiFi pasivo, guardado en NVS, noche y escaneo con la pantalla apagada). Falta medir el consumo y probarla horas en la muñeca y como firmware unico. La mascota se alimenta de las redes WiFi de su entorno (escaneo pasivo), evoluciona segun su dieta y los cuidados, y nunca muere.
 
 | Documento | Contenido |
 | --- | --- |
@@ -24,7 +24,7 @@ idf.py build
 idf.py -p <PORT> flash monitor   # p. ej. /dev/tty.usbmodem1101; sin -p lo autodetecta
 ```
 
-Para flashear dentro del launcher, usar `flash_all.sh` de ESP32Watch-Launcher (slot previsto: `ota_5`; `ota_4` es el slot de pruebas de core).
+Para flashear dentro del launcher, usar `flash_all.sh` de ESP32Watch-Launcher (esta en su `apps.conf`: `pet ota_5`; `ota_4` es el slot de pruebas de core). Sola, `idf.py flash` la graba en `factory` y sustituye al Launcher.
 
 ## Documentacion
 

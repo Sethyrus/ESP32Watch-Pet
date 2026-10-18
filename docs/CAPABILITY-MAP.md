@@ -37,11 +37,11 @@ Las fases 0 y 1 pueden solaparse una vez fijado `pet_view_t` (qué necesita el r
 Orden:
 1. **Pruebas en el reloj** R1 (sonda de radio) y D1 (flush LVGL de la escena) en `ota_4`: **hechas el 2026-10-17, ambas superadas** (heap mínimo 86 KB frente a ≥ 30; flush 14 ms frente a ≤ 40). `ota_4` borrado y `otadata` en blanco. Tamaño con WiFi ya medido: 0,99 MiB.
 2. **Consumo** E0–E2 (`PET_TECH.md`, sección 8): fija la frecuencia de escaneo (T10, T11).
-3. Bring-up: render propio en el panel, táctil, botones, RTC.
-4. Radio real → `pet_ingest_scan`; persistencia en NVS.
-5. Detección de modo, sueño, noche, saludo e IMU.
-6. Comprobar los dos modos de instalación con el mismo binario (`ota_5` y `factory`).
-7. Alta en el Launcher y trabajo entre repos (`PET_TECH.md`, sección 9); `check_apps.sh` sin avisos.
+3. Bring-up: escena por `lv_image`, táctil, gestos, botones, RTC. **Hecho (2026-10-17, probado en `ota_4`).**
+4. Radio real → `pet_ingest_scan`; persistencia en NVS A/B. **Hecho**; con USB y pantalla apagada escanea cada 60 s (R12).
+5. Detección de modo (USB = mesa), sueño, noche. **Hecho** salvo saludo e IMU (R11). **Sin probar:** el camino en batería con la pantalla apagada (`stay_awake` en light sleep) durante horas.
+6. Comprobar los dos modos de instalación con el mismo binario (`ota_5` y `factory`). **Pendiente:** hoy solo probado desde `ota_4` por el Launcher; standalone sin probar.
+7. Alta en el Launcher y trabajo entre repositorios (`PET_TECH.md`, sección 9). **Hecho en los ficheros** (`apps.conf`, `KNOWN[]`, tablas y GOTCHAS de core), pendiente de grabar con `flash_all.sh`; `check_apps.sh` sin avisos.
 - **Salida:** MVP jugable en el reloj; medidas de consumo documentadas en core `docs/`.
 
 ## Fuera del MVP

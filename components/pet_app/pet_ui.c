@@ -265,7 +265,7 @@ static void panel_refresh(int64_t now)
                 n += snprintf(buf + n, sizeof(buf) - n, " %s", VARIANT[s->variant]);
             }
         }
-        n += snprintf(buf + n, sizeof(buf) - n, "\n%s\nEdad %dd %dh   Redes %u", MOOD[pet_mood(s, now)],
+        n += snprintf(buf + n, sizeof(buf) - n, "\n%s\nEdad %dd %dh   Escaneos %u", MOOD[pet_mood(s, now)],
                       (int)(age / 86400), (int)(age % 86400 / 3600), (unsigned)s->total_scans);
         lv_label_set_text(s_info, buf);
         break;

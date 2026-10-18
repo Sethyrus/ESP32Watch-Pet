@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## Project Shape
-- ESP-IDF C firmware `ESP32WatchPet`: a virtual pet (Tamagotchi-style) app for the watch. `app_main()` in `main/main.c` only boots; the pet app (screen, buttons, screen timeout, sleep) lives in `components/pet_app`. Product spec in `docs/PET_DESIGN.md`, technical spec in `docs/PET_TECH.md`, art in `docs/STYLEGUIDE.md`, open decisions in `docs/DECISIONS.md`. Currently specs only: no game code yet.
+- ESP-IDF C firmware `ESP32WatchPet`: a virtual pet (Tamagotchi-style) app for the watch. `app_main()` in `main/main.c` only boots; the pet app (screen, buttons, screen timeout, sleep) lives in `components/pet_app`. Product spec in `docs/PET_DESIGN.md`, technical spec in `docs/PET_TECH.md`, art in `docs/STYLEGUIDE.md`, open decisions in `docs/DECISIONS.md`. Status: first playable app on the watch (engine, scene, pantry, status, settings, passive WiFi scan, NVS saves, night, screen-off scanning); not yet tested on the wrist over hours, in standalone (`factory`) or measured for power. `pet_app` modules: `pet_app.c` (tasks, power, scan schedule, saves), `pet_ui.c` (LVGL screens), `pet_radio.c` (one passive scan), `pet_store.c` (A/B saves in NVS).
 - Target hardware is Waveshare `ESP32-S3-Touch-AMOLED-2.06` with ESP32-S3R8, AMOLED 410x502 QSPI, FT3168 touch, QMI8658 IMU, PCF85063 RTC, AXP2101 PMU, ES8311 speaker, ES7210 dual-mic ADC, and microSD.
 - Baseline stack is `ESP-IDF 5.5.4 + LVGL 9 + waveshare/esp32_s3_touch_amoled_2_06` BSP. Do not migrate to ESP-IDF 6.x or ESP-Brookesia unless explicitly requested.
 - Shared board services (`watch_display.h`, `watch_power.h`, `watch_buttons.h`, `watch_battery.h`, `watch_rtc.h`, `watch_nvs.h`, `watch_launcher.h`, `imu_service.h`) come from `watch_board` in https://github.com/Sethyrus/ESP32Watch-core, pinned by tag in `main/idf_component.yml` (v0.5.1). Hardware docs live in that repo's `docs/`. Core fixes are propagated to every app in the same batch (core `AGENTS.md`, "Alineacion De Repos").
@@ -36,5 +36,7 @@
 ## Working Rules
 - Privacy: scans are passive only; never store or log raw BSSID/SSID, only salted hashes (`PET_TECH.md`, section 4).
 - Deployment: one binary, two installs: launcher app in `ota_5` or standalone in `factory` (`idf.py flash`); the mode is detected at runtime with `watch_launcher_is_available()`. Keep the image ≤ 1.5 MiB so standalone fits `factory`. Deep sleep does not work under the Launcher (`watch_launcher_boot_once()` returns to `factory`); see `PET_TECH.md`, section 2. Background scans with the screen off use `watch_power_screen_off(timeout, stay_awake)`, not `watch_power_sleep()` (it turns the screen on when the timeout fires).
+- `watch_power_screen_off()` never calls `stay_awake` while USB is connected: `radio_task` also polls the scan schedule when the screen is off (core `docs/GOTCHAS.md`, "WiFi Solo Para Escanear").
+- After editing `sdkconfig.defaults`, delete the generated `sdkconfig` and reconfigure: an old one wins over the defaults.
 - Do not commit, tag or push unless the user asks.
 - Never leave a test or benchmark firmware flashed on the watch without saying so.

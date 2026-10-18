@@ -52,6 +52,9 @@ Registro de decisiones del proyecto. Criterio general (usuario, 2026-10-17): **p
 | R8 | Las puntuaciones de familiaridad se actualizan por **épocas de ≥ 20 min**; así el modo mesa no promueve un AP a familiar en 5 min. |
 | R9 | Descenso pasivo de estadísticas lineal; la amortiguación solo en ganancias y pérdidas por evento. |
 | R10 | Tareas que dibujan con 8 KB de pila (medido: `pet_render` usa ~5,5 KB) y `ESP_MAIN_TASK_STACK_SIZE=8192`. |
+| R11 | Primera app jugable (2026-10-17): sin IMU (sacudida y saludo quedan fuera: `imu_service` no se puede apagar y mantendría el sensor encendido durante el sueño). Modo mesa = USB conectado, sin comprobar quietud (A3 sigue abierta). |
+| R12 | Con USB, `watch_power_screen_off` no llama a `stay_awake`: el calendario de escaneo lo mira también `radio_task` (cada 5 s, solo con la pantalla apagada); en batería sigue mandando `stay_awake`. Quien termina un escaneo con la pantalla apagada guarda la partida. |
+| R13 | La curiosidad por señal nueva (`MOOD_CURIOUS`) se dibuja con cara neutra, no con la de sorpresa (confundía: parecía un susto). La sorpresa queda para la sacudida. |
 | R4 | Valores numéricos de `PET_DESIGN.md` como punto de partida; se calibran con los tests A1–A10 en F1. |
 
 ## Abiertas

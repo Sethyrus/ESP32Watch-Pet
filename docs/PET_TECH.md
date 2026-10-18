@@ -145,7 +145,7 @@ En tiempo de ejecución esos ~165 KB se reparten entre los búferes de LVGL (~33
 
 ## 6. Energía, sueño y tareas
 
-**Semántica de core [verificado en `watch_power.h`]:** `watch_power_sleep(timeout)` **vuelve a encender la pantalla** al despertar, también por timeout. Por eso **no sirve para escanear en segundo plano**. Se usa `watch_power_screen_off(timeout, stay_awake)`: panel apagado y LVGL en pausa; mientras `stay_awake()` devuelve `true` el chip no duerme; cuando devuelve `false` entra en light sleep (despertando cada ~200 ms para mirar PWR) **sin encender la pantalla**. Con USB el chip no duerme (USB-Serial-JTAG), cosa que encaja con el modo mesa.
+**Semántica de core [verificado en `watch_power.h`]:** `watch_power_sleep(timeout)` **vuelve a encender la pantalla** al despertar, también por timeout. Por eso **no sirve para escanear en segundo plano**. Se usa `watch_power_screen_off(timeout, stay_awake)`: panel apagado y LVGL en pausa; mientras `stay_awake()` devuelve `true` el chip no duerme; cuando devuelve `false` entra en light sleep (despertando cada ~200 ms para mirar PWR) **sin encender la pantalla**. Con USB el chip no duerme (USB-Serial-JTAG), cosa que encaja con el modo mesa. **Con USB `stay_awake()` no se llama nunca** (verificado en el reloj, R12): `radio_task` mira también el calendario cada 5 s mientras la pantalla está apagada y guarda la partida al terminar el escaneo; en batería los tics se paran en light sleep y el calendario lo lleva `stay_awake()`.
 
 Patrón de escaneo con pantalla apagada:
 1. `system_task` llama a `watch_power_screen_off(0, pet_stay_awake)` al expirar la inactividad.
