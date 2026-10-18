@@ -40,8 +40,8 @@ Orden:
 3. Bring-up: escena por `lv_image`, táctil, gestos, botones, RTC. **Hecho (2026-10-17, probado en `ota_4`).**
 4. Radio real → `pet_ingest_scan`; persistencia en NVS A/B. **Hecho**; con USB y pantalla apagada escanea cada 60 s (R12).
 5. Detección de modo (USB = mesa), sueño, noche. **Hecho** salvo saludo e IMU (R11). **Sin probar:** el camino en batería con la pantalla apagada (`stay_awake` en light sleep) durante horas.
-6. Comprobar los dos modos de instalación con el mismo binario (`ota_5` y `factory`). **Pendiente:** hoy solo probado desde `ota_4` por el Launcher; standalone sin probar.
-7. Alta en el Launcher y trabajo entre repositorios (`PET_TECH.md`, sección 9). **Hecho en los ficheros** (`apps.conf`, `KNOWN[]`, tablas y GOTCHAS de core), pendiente de grabar con `flash_all.sh`; `check_apps.sh` sin avisos.
+6. Comprobar los dos modos de instalación con el mismo binario (`ota_5` y `factory`). **App en `ota_5`: hecho** (2026-10-18; el Launcher la lista como Pet, arranca con la partida guardada y PWR vuelve al Launcher). **Standalone en `factory`: pendiente.**
+7. Alta en el Launcher y trabajo entre repositorios (`PET_TECH.md`, sección 9). **Hecho:** `apps.conf`, `KNOWN[]`, tablas y GOTCHAS de core, grabada con `flash_all.sh pet` y `launcher`; `ota_4` borrado; `check_apps.sh` sin avisos.
 - **Salida:** MVP jugable en el reloj; medidas de consumo documentadas en core `docs/`.
 
 ## Fuera del MVP
