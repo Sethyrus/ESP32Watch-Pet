@@ -83,7 +83,7 @@ Si la despensa está llena se descarta primero el bocado más antiguo de tipo do
 
 ## 6. Ánimo, expresión y reacciones
 
-**Escalera de ánimo** (TamaFi; gana la primera que cumpla): dormida → hambrienta (saciedad < 25) → cansada (energía < 20) → triste (ánimo < 40) → aburrida (sin señal nueva en 2 h estando despierta) → curiosa (señal nueva en el último escaneo) → feliz (ánimo ≥ 70) → calma.
+**Escalera de ánimo** (TamaFi; gana la primera que cumpla): dormida → hambrienta (saciedad < 25) → cansada (energía < 20) → triste (ánimo < 40) → aburrida (sin señal nueva, comida ni caricia en 2 h estando despierta) → curiosa (señal nueva en el último escaneo) → feliz (ánimo ≥ 70) → calma.
 
 **Reacciones** (con la pantalla encendida; ideas de Lumo/RoboEyes, código propio):
 

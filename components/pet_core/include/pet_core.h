@@ -11,6 +11,7 @@
 
 #define PET_ONE          10000          /* 1 punto de estadistica */
 #define PET_MAX          (100 * PET_ONE)
+#define PET_EGG_HATCH_S  600            /* segundos activos hasta eclosionar */
 #define PET_PANTRY_MAX   20
 #define PET_FAM_MAX      32             /* familiares y recientes: 32 + 32 */
 #define PET_KEY_LEN      16

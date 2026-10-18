@@ -270,6 +270,15 @@ bool pet_render_creature(const pet_view_t *v, uint8_t *idx, int w, int h)
             }
     }
 
+    if (v->stage == PET_EGG && v->crack) {      /* grieta en zigzag desde la parte alta */
+        static const int8_t ZZ[13] = {0, 1, 1, 0, -1, -1, 0, 1, 1, 0, -1, -1, 0};
+        const int n = v->crack == 1 ? 6 : 13;
+        for (int i = 0; i < n; i++) {
+            int y = ctop + 3 + i, x = PET_W / 2 + ZZ[i];
+            if (y <= cbot && T[y][x] == 1) idx[y * PET_W + x] = PAL_DARK;
+        }
+    }
+
     if (v->variant == VAR_POLISHED) {
         int mx = 0;
         for (int y = ctop; y < ctop + 8 && y < PET_H; y++)
@@ -322,4 +331,36 @@ bool pet_render_creature(const pet_view_t *v, uint8_t *idx, int w, int h)
         }
     }
     return true;
+}
+
+/* ---- iconos de comida ---- */
+static const char *const FOOD_ICONS[3][PET_FOOD_ICON] = {
+    { "....oooo....", "..ooBBBBoo..", ".oBBBBBBBBo.", ".oBBLLBBBBo.", "oBBLLBBBBBBo", "oBBBBBBBBBBo",
+      "oBBBBBBBBBBo", "oBBBBBBBBSBo", ".oBBBBBBSSo.", ".oBBBBBBBBo.", "..ooBBBBoo..", "....oooo...." },
+    { ".....oo.....", ".....oo.....", "....oBBo....", "....oBBo....", "ooooBLBBoooo", "oBBBBBBBBBBo",
+      ".oBBBBBBBBo.", "..oBBBBBBo..", "..oBBBBBBo..", ".oBBBooBBBo.", ".oBBo..oBBo.", ".ooo....ooo." },
+    { "............", "...oooooo...", "...oBBBBo...", "...oBLBLo...", "...oBBBBo...", "...oBLBLo...",
+      "..ooBBBBoo..", "..oBBBBBBo..", "..oBLBBLBo..", "..oBBBBBBo..", "..oBBooBBo..", "..oooooooo.." },
+};
+/* contorno, base, brillo, sombra */
+static const uint16_t FOOD_COLORS[3][4] = {
+    { 0x1B05, 0x4EF0, 0xBFFA, 0x2E88 },   /* casero: verde */
+    { 0x9A02, 0xFC64, 0xFEB5, 0xEA60 },   /* lejano: naranja */
+    { 0x4196, 0x8CDD, 0xFF2D, 0x6339 },   /* ciudad: indigo y ventanas amarillas */
+};
+
+void pet_food_icon_rgb565(int type, int scale, uint16_t bg, uint16_t *dst)
+{
+    if (type < 0 || type > 2 || scale < 1) return;
+    const int n = PET_FOOD_ICON * scale;
+    for (int y = 0; y < n; y++)
+        for (int x = 0; x < n; x++) {
+            char c = FOOD_ICONS[type][y / scale][x / scale];
+            uint16_t px = bg;
+            if (c == 'o') px = FOOD_COLORS[type][0];
+            else if (c == 'B') px = FOOD_COLORS[type][1];
+            else if (c == 'L') px = FOOD_COLORS[type][2];
+            else if (c == 'S') px = FOOD_COLORS[type][3];
+            dst[y * n + x] = px;
+        }
 }

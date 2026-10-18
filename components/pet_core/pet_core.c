@@ -29,7 +29,7 @@
 #define ABSENCE_ERR_BLOCK  (12 * 3600)
 #define ABSENCE_ERR_MAX    2
 #define STEP_MAX_GAP_S     300
-#define EGG_HATCH_S        600
+#define EGG_HATCH_S        PET_EGG_HATCH_S
 #define JUV_AGE_S          (36 * 3600)
 #define JUV_GP             40
 #define JUV_FORCE_S        (7 * 86400)
@@ -270,6 +270,7 @@ bool pet_feed(pet_state_t *s, pet_food_t type, int64_t now_s)
     if (idx < 0) return false;
     eat(s, idx, 100, true, now_s);
     s->last_action_s = now_s;
+    s->last_novel_s = now_s;       /* comer tambien entretiene: reinicia el aburrimiento */
     s->need_low_s = 0;
     visit(s, now_s);
     evolve_check(s, now_s);
@@ -527,6 +528,7 @@ pet_reaction_t pet_touch(pet_state_t *s, int64_t now_s, uint32_t mono_ms)
             s->touch_gain += (uint32_t)(s->mood - before);
         }
     }
+    if (s->stage != PET_EGG && !pet_is_night(s, now_s)) s->last_novel_s = now_s;   /* una caricia entretiene */
     react(s, REACT_PET, mono_ms, 2500);
     evolve_check(s, now_s);
     return REACT_PET;

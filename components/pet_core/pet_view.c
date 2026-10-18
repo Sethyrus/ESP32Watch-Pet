@@ -23,6 +23,10 @@ pet_anim_t pet_view(const pet_state_t *s, int64_t now_s, uint32_t mono_ms, pet_v
     else if (s->stage == PET_ADULT)
         out->shape = s->branch == BRANCH_EXPLORER ? 1 : 0;
 
+    if (s->stage == PET_EGG) {
+        uint32_t pct = (uint32_t)s->egg_active_s * 100 / PET_EGG_HATCH_S;
+        out->crack = pct >= 85 ? 2 : (pct >= 60 ? 1 : 0);
+    }
     pet_mood_t m = pet_mood(s, now_s);
     out->expr = s->stage == PET_EGG ? EXPR_NEUTRAL : expr_for(m);
     bool live = (int32_t)(s->react_until_ms - mono_ms) > 0;

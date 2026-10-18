@@ -2,6 +2,7 @@
 #include "world.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static int fails, checks;
 #define CHECK(c, ...) do { checks++; if (!(c)) { fails++; printf("  FALLO %s:%d: ", __FILE__, __LINE__); printf(__VA_ARGS__); printf("\n"); } } while (0)
@@ -571,6 +572,44 @@ static void test_decisions_and_view(void)
     CHECK(v.expr != EXPR_LOVE, "la reaccion caduca");
 }
 
+static void test_boredom_and_crack(void)
+{
+    SECTION("aburrimiento y grietas del huevo");
+    pet_state_t s = fresh(20);
+    s.stage = PET_BABY;
+    const int64_t d = T0 + 12 * 3600, t = d + 3 * 3600;
+    s.satiety = s.energy = s.mood = 80 * PET_ONE;
+    s.novel_until_s = 0; s.last_novel_s = d;
+    s.last_s = t - 1;                                   /* sin hueco de ausencia */
+    CHECK(pet_mood(&s, t) == MOOD_BORED, "aburrida tras 3 h sin novedad");
+    s.pantry[s.pantry_n++] = (pet_bite_t){ FOOD_DOMESTIC, t - 60 };
+    CHECK(pet_feed(&s, FOOD_DOMESTIC, t), "come");
+    CHECK(s.last_novel_s == t && pet_mood(&s, t) != MOOD_BORED, "comer reinicia el aburrimiento");
+    s.last_novel_s = d; s.last_s = t - 1;
+    CHECK(pet_touch(&s, t, 1000) == REACT_PET && s.last_novel_s == t, "una caricia reinicia el aburrimiento");
+    pet_state_t n = fresh(21);
+    n.stage = PET_BABY; n.last_s = t - 1; n.last_novel_s = d;
+    n.satiety = n.energy = n.mood = 80 * PET_ONE;
+    pet_ap_t ap; mk_ap(&ap, 7, false);
+    pet_ingest_scan(&n, &ap, 1, t);
+    CHECK(pet_mood(&n, t) == MOOD_CURIOUS, "una senal nueva sigue dando curiosidad");
+
+    pet_state_t e = fresh(22);
+    pet_view_t v0, v1, v2;
+    int cr[3] = { 0, PET_EGG_HATCH_S * 6 / 10, PET_EGG_HATCH_S * 9 / 10 };
+    pet_view_t *vv[3] = { &v0, &v1, &v2 };
+    for (int i = 0; i < 3; i++) { e.egg_active_s = (uint16_t)cr[i]; pet_view(&e, T0, 0, vv[i]); }
+    CHECK(v0.crack == 0 && v1.crack == 1 && v2.crack == 2, "grietas 0/1/2 segun el progreso: %d %d %d", v0.crack, v1.crack, v2.crack);
+    static uint8_t a[PET_W * PET_H], b[PET_W * PET_H], c[PET_W * PET_H];
+    pet_render_creature(&v0, a, PET_W, PET_H); pet_render_creature(&v1, b, PET_W, PET_H); pet_render_creature(&v2, c, PET_W, PET_H);
+    int d01 = 0, d12 = 0;
+    for (int i = 0; i < PET_W * PET_H; i++) { d01 += a[i] != b[i]; d12 += b[i] != c[i]; }
+    CHECK(d01 >= 4 && d12 >= 4, "las grietas se ven (%d y %d px)", d01, d12);
+    uint16_t px[PET_FOOD_ICON * PET_FOOD_ICON * 4], px2[PET_FOOD_ICON * PET_FOOD_ICON * 4];
+    pet_food_icon_rgb565(0, 2, 0x1234, px); pet_food_icon_rgb565(1, 2, 0x1234, px2);
+    CHECK(px[0] == 0x1234 && memcmp(px, px2, sizeof(px)) != 0, "iconos de comida distintos y con fondo");
+}
+
 int main(void)
 {
     test_primitives();
@@ -585,6 +624,7 @@ int main(void)
     test_a6();
     test_a7();
     test_decisions_and_view();
+    test_boredom_and_crack();
     test_a1_a2();
     test_lifestyle_report();
     printf("\n%d comprobaciones, %d fallos\n", checks, fails);

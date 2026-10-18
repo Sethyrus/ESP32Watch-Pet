@@ -14,6 +14,7 @@
 - Durable project config lives in `sdkconfig.defaults`, `partitions.csv`, component manifests and `dependencies.lock`. `sdkconfig`, `build/`, and `managed_components/` are generated/local.
 
 ## Commands
+- Power diary: the app logs battery and scans hourly in NVS; read it with `python tools/read_log.py` (ESP-IDF env active; resets the chip, writes nothing).
 - Source ESP-IDF: `source "$HOME/.espressif/tools/activate_idf_v5.5.4.sh"` (EIM install; otherwise core `docs/SETUP.md`).
 - First setup or fresh config: `idf.py set-target esp32s3`.
 - Build/primary verification: `idf.py build`.

@@ -186,6 +186,8 @@ La sonda de radio está en `tools/probes/radio_probe.c` (compilada y validada en
 | E2 | Escaneo cada 15 min |
 | D1 | LVGL: tiempo de flush de la escena 288×288 (objetivo ≤ 40 ms). **Hecha:** 14 ms (máx. 17) |
 
+**Diario de consumo (R14):** la app escribe en NVS una fila por hora (mV, %, escaneos, USB/pantalla/arranque); `python tools/read_log.py` la lee del reloj y calcula los mV/h entre horas consecutivas en batería, sin firmware de prueba. Es la vía normal para E1/E2: se lleva el reloj varios días y se lee después.
+
 Método de consumo de core: tendencia de tensión (mV/h), ≥ 3 h por prueba, en la muñeca. **Objetivo: el escaneo en muñeca añade ≤ 25 % sobre E0.** Con eso se fija la frecuencia; si no se alcanza a 15 min, se espacia o se condiciona al movimiento.
 
 Las pruebas se graban en **`ota_4`** (slot de pruebas de core) y se lanzan desde el Launcher. **Nunca se dejan grabadas sin avisar**; al terminar se borra el slot o se reinstala lo normal.

@@ -19,6 +19,7 @@
 #define TOAST_MS 4000
 #define SHIFT_MS 60000
 #define PANEL_BG 0x0b1020
+#define EXPIRY_ALERT_S (2 * 3600)
 
 static const char *TAG = "pet_ui";
 
@@ -44,6 +45,9 @@ static uint32_t s_ov_start;
 static bool s_ov_active;
 static uint32_t s_toast_until;
 static char s_toast_text[32];
+static char s_alert_text[32];   // persistent hint under the clock, shown when no toast is up
+static uint16_t *s_icon_px[3];
+static lv_image_dsc_t s_icon_dsc[3];
 
 static const char *STAGE[] = {"Huevo", "Cria", "Juvenil", "Adulto"};
 static const char *BRANCH[] = {"", "Casero", "Explorador"};
@@ -82,14 +86,28 @@ static lv_obj_t *make_button(lv_obj_t *parent, const char *text, int w, int h, l
     return b;
 }
 
+// The banner under the clock: a toast for a few seconds, otherwise the standing alert.
+static void banner_update(void)
+{
+    if (!s_toast) {
+        return;
+    }
+    const bool toast_up = s_toast_until != 0;
+    const char *txt = toast_up ? s_toast_text : s_alert_text;
+    if (txt[0] == '\0') {
+        lv_obj_add_flag(s_toast, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+    lv_label_set_text(s_toast, txt);
+    lv_obj_set_style_text_color(s_toast, lv_color_hex(toast_up ? 0xfde68a : 0xfb923c), 0);
+    lv_obj_remove_flag(s_toast, LV_OBJ_FLAG_HIDDEN);
+}
+
 static void toast(const char *text)
 {
     snprintf(s_toast_text, sizeof(s_toast_text), "%s", text);
     s_toast_until = pet_mono_ms() + TOAST_MS;
-    if (s_toast) {
-        lv_label_set_text(s_toast, s_toast_text);
-        lv_obj_remove_flag(s_toast, LV_OBJ_FLAG_HIDDEN);
-    }
+    banner_update();
 }
 
 static void start_override(pet_anim_t a)
@@ -168,6 +186,12 @@ static void open_pantry(void)
     for (int i = 0; i < 3; i++) {
         lv_obj_t *b = make_button(s_panel, "", 330, 68, on_feed, (void *)(intptr_t)i, &s_rows[i]);
         lv_obj_align(b, LV_ALIGN_TOP_MID, 0, 96 + i * 82);
+        if (s_icon_px[i]) {
+            lv_obj_t *ic = lv_image_create(b);
+            lv_image_set_src(ic, &s_icon_dsc[i]);
+            lv_obj_align(ic, LV_ALIGN_LEFT_MID, 12, 0);
+            lv_obj_remove_flag(ic, LV_OBJ_FLAG_CLICKABLE);
+        }
     }
 }
 
@@ -360,6 +384,18 @@ void pet_ui_init(void)
                              .data_size = SCENE * SCENE * 2, .data = (const uint8_t *)s_buf[0]};
     s_back = 1;
 
+    // Pantry icons: 12x12 pixel art at 3x, drawn on the button colour (0x1e293b).
+    const int isz = PET_FOOD_ICON * 3;
+    for (int i = 0; i < 3; i++) {
+        s_icon_px[i] = heap_caps_malloc((size_t)isz * isz * 2, MALLOC_CAP_SPIRAM);
+        if (s_icon_px[i]) {
+            pet_food_icon_rgb565(i, 3, 0x1947, s_icon_px[i]);
+            s_icon_dsc[i] = (lv_image_dsc_t){.header = {.magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RGB565,
+                                                        .w = isz, .h = isz, .stride = isz * 2},
+                                             .data_size = (uint32_t)isz * isz * 2, .data = (const uint8_t *)s_icon_px[i]};
+        }
+    }
+
     lv_obj_t *scr = lv_screen_active();
     lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
     lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
@@ -394,7 +430,7 @@ static bool view_eq(const pet_view_t *a, const pet_view_t *b)
 {
     return a->seed == b->seed && a->stage == b->stage && a->shape == b->shape && a->expr == b->expr &&
            a->squash == b->squash && a->dy == b->dy && a->look_x == b->look_x && a->variant == b->variant &&
-           a->mouth_open == b->mouth_open && a->food == b->food && a->zstep == b->zstep && a->blink == b->blink;
+           a->mouth_open == b->mouth_open && a->food == b->food && a->zstep == b->zstep && a->blink == b->blink && a->crack == b->crack;
 }
 
 void pet_ui_tick(void)
@@ -419,6 +455,7 @@ void pet_ui_tick(void)
     pet_anim_t anim;
     uint32_t events;
     int pantry = 0;
+    char alert[sizeof(s_alert_text)] = "";
     pet_lock();
     if (new_sec) {
         pet_step(&g_pet, now);
@@ -429,8 +466,27 @@ void pet_ui_tick(void)
     }
     events = pet_take_events(&g_pet);
     anim = pet_view(&g_pet, now, mono, &v);
+    int exotic = 0;
+    int64_t soonest = -1;
     for (int i = 0; i < 3; i++) {
-        pantry += pet_pantry_count(&g_pet, (pet_food_t)i);
+        const int n = pet_pantry_count(&g_pet, (pet_food_t)i);
+        pantry += n;
+        if (i == FOOD_EXOTIC) {
+            exotic = n;
+        }
+        const int64_t ttl = n ? pet_pantry_expires_in(&g_pet, (pet_food_t)i, now) : -1;
+        if (ttl >= 0 && (soonest < 0 || ttl < soonest)) {
+            soonest = ttl;
+        }
+    }
+    if (g_pet.stage != PET_EGG) {
+        if (pantry >= PET_PANTRY_MAX) {
+            snprintf(alert, sizeof(alert), "Despensa llena");
+        } else if (soonest >= 0 && soonest < EXPIRY_ALERT_S) {
+            snprintf(alert, sizeof(alert), "Caduca pronto");
+        } else if (exotic > 0) {
+            snprintf(alert, sizeof(alert), "Senal lejana por comer");
+        }
     }
     pet_unlock();
 
@@ -515,7 +571,11 @@ void pet_ui_tick(void)
     else if (events & EVT_NEW_SIGNAL) toast("Senal nueva!");
     if (s_toast_until && (int32_t)(mono - s_toast_until) >= 0) {
         s_toast_until = 0;
-        lv_obj_add_flag(s_toast, LV_OBJ_FLAG_HIDDEN);
+        banner_update();
+    }
+    if (new_sec && strcmp(alert, s_alert_text) != 0) {
+        memcpy(s_alert_text, alert, sizeof(s_alert_text));
+        banner_update();
     }
     bsp_display_unlock();
 }

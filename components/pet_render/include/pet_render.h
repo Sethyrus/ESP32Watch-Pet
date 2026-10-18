@@ -51,6 +51,7 @@ typedef struct {
     uint8_t food;       /* bocado en pantalla: 0 nada, 1..4 tamano restante */
     uint8_t zstep;      /* altura de la "z" al dormir (0..3) */
     bool    blink;      /* parpadeo: ojos cerrados sin cambiar la boca */
+    uint8_t crack;      /* huevo a punto de eclosionar: 0 entero, 1 grieta, 2 grieta larga */
 } pet_view_t;
 
 typedef struct { int w, h; } pet_size_t;
@@ -69,6 +70,11 @@ void pet_palette_rgb888(uint32_t seed, uint32_t out[PAL_COUNT]);
 /* Escala entera por vecino mas cercano a RGB565 (dst_stride en pixeles). */
 void pet_blit_scaled_rgb565(const uint8_t *idx, int w, int h, int scale,
                             const uint16_t *pal, uint16_t *dst, int dst_stride);
+
+/* Iconos de comida de 12x12 (tipo 0 casero, 1 lejano, 2 ciudad) a RGB565, ampliados por
+ * scale en dst (12*scale)^2; el fondo se rellena con bg (el color del boton donde van). */
+#define PET_FOOD_ICON 12
+void pet_food_icon_rgb565(int type, int scale, uint16_t bg, uint16_t *dst);
 
 /* Animaciones: transformaciones sobre la vista, cuantizadas a PET_FRAME_MS. */
 #define PET_FRAME_MS 80

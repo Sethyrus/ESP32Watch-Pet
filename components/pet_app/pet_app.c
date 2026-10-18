@@ -21,6 +21,7 @@
 #include "lvgl.h"
 #include "nvs.h"
 #include "pet_priv.h"
+#include "pet_log.h"
 #include "pet_radio.h"
 #include "pet_store.h"
 #include "watch_battery.h"
@@ -48,6 +49,7 @@ static const char *TAG = "pet_app";
 pet_state_t g_pet;
 volatile int g_batt_pct = -1;
 volatile bool g_usb;
+static volatile int s_batt_mv;
 
 static SemaphoreHandle_t s_mu;
 static SemaphoreHandle_t s_save_mu; // system_task and radio_task may both save
@@ -126,7 +128,28 @@ static void read_battery(int64_t now)
     if (watch_battery_read(&b) == ESP_OK) {
         g_batt_pct = b.present ? b.percent : -1;
         g_usb = b.usb;
+        s_batt_mv = b.millivolts;
     }
+}
+
+// One diary line per wall-clock hour (the first one right after boot, flagged), from the
+// system task whether the screen is on or off.
+static void telemetry_tick(void)
+{
+    static int64_t last_hour = -1;
+    const int64_t now = pet_now_s();
+    if (now / 3600 == last_hour) {
+        return;
+    }
+    const bool first = last_hour < 0;
+    last_hour = now / 3600;
+    read_battery(now);
+    pet_lock();
+    const uint32_t scans = g_pet.total_scans;
+    pet_unlock();
+    pet_log_add(now, s_batt_mv, g_batt_pct,
+                (uint8_t)((g_usb ? PET_LOG_USB : 0) | (s_screen_on ? PET_LOG_SCREEN_ON : 0) | (first ? PET_LOG_BOOT : 0)),
+                scans);
 }
 
 static bool scan_due(void)
@@ -196,6 +219,7 @@ static bool stay_awake(void)
     if (now - s_last_batt_s >= BATT_OFF_S) {
         read_battery(now);
     }
+    telemetry_tick();
     if (scan_due()) {
         request_scan();
         return true;
@@ -278,6 +302,7 @@ static void system_task(void *arg)
         if (now - s_last_batt_s >= BATT_ON_S) {
             read_battery(now);
         }
+        telemetry_tick();
         if (scan_due()) {
             request_scan();
         }
@@ -329,6 +354,7 @@ esp_err_t pet_app_start(void)
 
     // Game: load the save, or start with a new egg. A clock that lost its time re-anchors
     // the pet instead of simulating a bogus gap.
+    pet_log_load();
     if (!pet_store_load(&g_pet)) {
         new_game();
         s_force_save = true;
