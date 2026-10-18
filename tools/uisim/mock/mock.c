@@ -10,7 +10,6 @@
 #include "lvgl.h"
 #include "pet_gfx.h"
 #include "png.h"
-#include "fonts/pet_fonts.h"
 
 #define W 410
 #define H 502
@@ -20,6 +19,10 @@ LV_FONT_DECLARE(mk_pix20)
 LV_FONT_DECLARE(mk_pix28)
 LV_FONT_DECLARE(mk_jersey64)
 LV_FONT_DECLARE(mk_silk16)
+LV_FONT_DECLARE(mk_bar14)
+LV_FONT_DECLARE(mk_bar16)
+LV_FONT_DECLARE(mk_bar20)
+LV_FONT_DECLARE(mk_bar28)
 LV_FONT_DECLARE(mk_j15_20)
 LV_FONT_DECLARE(mk_j15_24)
 LV_FONT_DECLARE(mk_j15_30)
@@ -396,7 +399,7 @@ static void dir_b_home(const char *dir)
     }
     canvas_show(scr);
     label(scr, &mk_cond72, 0xf4f4f4, "10:02", 0, 2, LV_ALIGN_TOP_MID);
-    label(scr, &pet_font_16, 0x94b0c2, "sáb 18  ·  Nivel 3  ·  125 monedas", 0, 84, LV_ALIGN_TOP_MID);
+    label(scr, &mk_bar16, 0x94b0c2, "sáb 18  ·  Nivel 3  ·  125 monedas", 0, 84, LV_ALIGN_TOP_MID);
     /* complicaciones: cuatro anillos con su icono */
     static const int RP[4][2] = { { 56, 176 }, { 56, 262 }, { 354, 176 }, { 354, 262 } };
     for (int i = 0; i < 4; i++) {
@@ -423,7 +426,7 @@ static void dir_b_home(const char *dir)
     lv_obj_set_style_border_width(pill, 0, 0);
     lv_obj_set_style_radius(pill, 17, 0);
     lv_obj_remove_flag(pill, LV_OBJ_FLAG_SCROLLABLE);
-    label(pill, &pet_font_16, 0xffcd75, "Quiere fruta", 0, 0, LV_ALIGN_CENTER);
+    label(pill, &mk_bar16, 0xffcd75, "Quiere fruta", 0, 0, LV_ALIGN_CENTER);
     shot(dir, "b1_jardin_noche");
 }
 
@@ -438,16 +441,16 @@ static void dir_b_food(const char *dir)
         if (i < 4) fill(110, y + 56, 250, 1, 0x1c2236);
     }
     canvas_show(scr);
-    label(scr, &pet_font_28, 0xf4f4f4, "Comer", 0, 30, LV_ALIGN_TOP_MID);
+    label(scr, &mk_bar28, 0xf4f4f4, "Comer", 0, 30, LV_ALIGN_TOP_MID);
     static const char *const N[5] = { "Pan", "Fruta", "Guiso", "Pastel", "Medicina" };
     static const char *const D[5] = { "+25 comida", "+15 comida  +5 diversión", "+45 comida", "+25 diversión", "cura el malito" };
     static const char *const P[5] = { "3", "5", "8", "10", "20" };
     for (int i = 0; i < 5; i++) {
-        label(scr, &pet_font_20, 0xf4f4f4, N[i], 110, 96 + i * 62, LV_ALIGN_TOP_LEFT);
-        label(scr, &pet_font_14, 0x94a3b8, D[i], 110, 122 + i * 62, LV_ALIGN_TOP_LEFT);
-        label(scr, &pet_font_20, 0xffcd75, P[i], -54, 104 + i * 62, LV_ALIGN_TOP_RIGHT);
+        label(scr, &mk_bar20, 0xf4f4f4, N[i], 110, 96 + i * 62, LV_ALIGN_TOP_LEFT);
+        label(scr, &mk_bar14, 0x94a3b8, D[i], 110, 122 + i * 62, LV_ALIGN_TOP_LEFT);
+        label(scr, &mk_bar20, 0xffcd75, P[i], -54, 104 + i * 62, LV_ALIGN_TOP_RIGHT);
     }
-    label(scr, &pet_font_16, 0x64748b, "60 monedas", 0, 420, LV_ALIGN_TOP_MID);
+    label(scr, &mk_bar16, 0x64748b, "60 monedas", 0, 420, LV_ALIGN_TOP_MID);
     shot(dir, "b2_jardin_comer");
 }
 

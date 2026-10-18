@@ -1,6 +1,6 @@
 # Pet Tech: especificación técnica
 
-Estado: **juego v2** (2026-10-18; ver `DECISIONS.md`, R16–R25). Producto en `PET_DESIGN.md`; decisiones en `DECISIONS.md`. Lo verificado el 2026-10-17 (código de core, compilaciones de prueba) se marca **[verificado]**; lo que solo puede medirse en el reloj, **[medir en F2]**.
+Estado: **juego v2** (2026-10-18; ver `DECISIONS.md`, R16–R28). Producto en `PET_DESIGN.md`; decisiones en `DECISIONS.md`. Lo verificado el 2026-10-17 (código de core, compilaciones de prueba) se marca **[verificado]**; lo que solo puede medirse en el reloj, **[medir en F2]**.
 
 ## 1. Estructura
 
@@ -20,7 +20,15 @@ ESP32Watch-Pet/
 └── docs/
 ```
 
-**Escena y juegos (v2):** `pet_scene` y `pet_game` dibujan en un búfer RGB565 de 400×280 en PSRAM (doble búfer) que la UI enseña con un `lv_image`; la escena se redibuja solo cuando cambia algo. `tools/uisim` compila `pet_ui*.c` sin tocarlo con unos shims (`bsp/esp-bsp.h`, `esp_heap_caps.h`, `esp_log.h`) e implementa `pet_priv.h`. Imagen del firmware: 1,15 MiB (cabe en `factory`).
+**Escena y juegos (v2):** `pet_scene` y `pet_game` dibujan en un búfer RGB565 de 400×280 en PSRAM (doble búfer) que la UI enseña con un `lv_image`; la escena se redibuja solo cuando cambia algo. `tools/uisim` compila `pet_ui*.c` sin tocarlo con unos shims (`bsp/esp-bsp.h`, `esp_heap_caps.h`, `esp_log.h`) e implementa `pet_priv.h`. Imagen del firmware: 1,10 MiB (cabe en `factory`).
+
+**Habitación (R26):** `pet_room_draw(g, ox, oy, sky)` dibuja la habitación en coordenadas de pantalla vista desde una ventana, así que todas las piezas casan al píxel:
+- el fondo fijo de 410×502, con la bandeja de madera pintada;
+- una copia atenuada para los menús;
+- el fondo de la escena, que se rehace al cambiar el cielo;
+- la tira del HUD (pips y XP), que se rehace solo cuando cambia lo que enseña, con doble búfer.
+
+Todo en PSRAM: unos 1,6 MB con los búferes de escena. De noche se aplica `pet_room_night` y el fondo fijo se rehace bajo el bloqueo de LVGL dos veces al día. Al ser todo fijo y oscuro, se quita el desplazamiento antiquemado de la escena: la criatura se mueve sola y la pantalla se apaga a los pocos segundos.
 
 **Partículas (R23):** `pet_parts_t` (64 partículas, en `pet_scene`) vive en `ui_task`. Las peticiones de efectos llegan por una cola pequeña protegida con `pet_lock`, porque las piden tanto los callbacks de LVGL como `ui_task`. Mientras quedan partículas vivas, la escena se redibuja en cada tic (40 ms).
 

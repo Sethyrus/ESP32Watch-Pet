@@ -591,6 +591,7 @@ static int script_mode(const char *file, const char *outdir)
                 die("cannot write %s", path);
             }
             printf("%s\n", path);
+            uisim_log('I', "uisim", "shot %s at mono %u ms", tok[1], (unsigned)s_mono);
         } else if (!strcmp(c, "wake")) {
             bsp_display_lock(0);
             pet_ui_wake();

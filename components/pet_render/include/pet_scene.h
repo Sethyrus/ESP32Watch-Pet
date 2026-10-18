@@ -24,6 +24,9 @@ typedef enum {
     FX_COUNT
 } pet_fx_t;
 
+/* Actividades por su cuenta, según a lo que más juega (su objeto se dibuja en la escena). */
+typedef enum { ACT_NONE, ACT_BALL, ACT_LIFT, ACT_READ, ACT_DOZE, ACT_COUNT } pet_act_t;
+
 #define PET_PARTS_MAX 64
 
 typedef struct {
@@ -55,6 +58,9 @@ typedef struct {
     bool       night;
     bool       dark;            /* luz apagada: todo atenuado */
     const pet_parts_t *parts;   /* partículas encima de todo (o NULL) */
+    const uint16_t *bg;         /* fondo ya dibujado (la habitación) o NULL: negro con suelo */
+    uint8_t    act;             /* pet_act_t: lo que está haciendo por su cuenta */
+    uint32_t   act_ms;          /* tiempo desde que empezó la actividad */
     uint32_t   t_ms;            /* reloj para animar burbuja y estrellas */
 } pet_scene_t;
 

@@ -11,11 +11,14 @@ typedef enum { BOT_PERFECT, BOT_SLOPPY, BOT_RANDOM } bot_t;
 static uint32_t lcg(uint32_t *r) { *r = *r * 1664525u + 1013904223u; return *r >> 8; }
 
 /* Juega una partida a 30 fps. Devuelve el rendimiento; ms y score por puntero. */
+static int s_level = 1;   /* nivel de la criatura: sube la dificultad */
+
 static int play(pet_game_id_t id, uint32_t seed, bot_t bot, uint32_t *ms, int *score)
 {
     pet_game_t g;
     pet_view_t v = { .seed = seed, .stage = PET_BABY };
     pet_game_start(&g, id, seed, &v);
+    g.level = (uint8_t)s_level;
     uint32_t r = seed * 7 + 1;
     pet_input_t in = {0};
     uint16_t fb[PET_GAME_W * PET_GAME_H];
@@ -28,7 +31,6 @@ static int play(pet_game_id_t id, uint32_t seed, bot_t bot, uint32_t *ms, int *s
         case BOT_SLOPPY:                       /* reacciona tarde y se equivoca a veces */
             if (lcg(&r) % 100 < 70) in = want;
             if (id == GAME_MEMORY && want.down && lcg(&r) % 100 < 8) { in.x = (int16_t)(lcg(&r) % 400); in.y = (int16_t)(lcg(&r) % 280); }
-            if (id == GAME_LIFT) in.down = (frames % 6) < 3;   /* 5 toques/s */
             break;
         default:                               /* toca en sitios al azar, 2 veces por segundo */
             in.down = (frames % 15) < 3;
@@ -65,6 +67,23 @@ int main(void)
             if (b == BOT_RANDOM) CHECK(sum / 200 <= 30, "%s: bot al azar <= 30 de media (%d)", pet_game_name((pet_game_id_t)id), sum / 200);
         }
     }
+    /* nivel 10: más difícil, pero el bot perfecto sigue pudiendo */
+    s_level = 10;
+    for (int id = 0; id < GAME_COUNT; id++) {
+        int lo = 101, sum = 0, slo = 101, ssum = 0;
+        for (uint32_t s = 1; s <= 100; s++) {
+            uint32_t ms; int sc;
+            int p = play((pet_game_id_t)id, s, BOT_PERFECT, &ms, &sc);
+            if (p < lo) lo = p;
+            sum += p;
+            p = play((pet_game_id_t)id, s, BOT_SLOPPY, &ms, &sc);
+            if (p < slo) slo = p;
+            ssum += p;
+        }
+        printf("%-8s nivel 10: perfecto media %3d (min %3d), regular media %3d\n", pet_game_name((pet_game_id_t)id), sum / 100, lo, ssum / 100);
+        CHECK(sum / 100 >= 90 && lo >= 60, "%s nivel 10: bot perfecto >= 90 de media (%d, min %d)", pet_game_name((pet_game_id_t)id), sum / 100, lo);
+    }
+    s_level = 1;
     /* determinismo */
     uint32_t m1, m2; int s1, s2;
     play(GAME_CATCH, 42, BOT_SLOPPY, &m1, &s1);
@@ -72,7 +91,7 @@ int main(void)
     CHECK(m1 == m2 && s1 == s2, "misma semilla, misma partida");
 
     /* sucesos para sonidos: el bot perfecto los provoca todos los de su juego */
-    static const uint16_t WANT[GAME_COUNT] = { GEV_CATCH | GEV_STAR, GEV_PAD | GEV_GOOD | GEV_WIN, GEV_TICK | GEV_LIFTED | GEV_WIN };
+    static const uint16_t WANT[GAME_COUNT] = { GEV_CATCH | GEV_STAR, GEV_PAD | GEV_GOOD | GEV_WIN, GEV_TICK | GEV_LIFTED | GEV_WIN | GEV_PERFECT };
     for (int id = 0; id < GAME_COUNT; id++) {
         pet_game_t g;
         pet_view_t v = { .seed = 3, .stage = PET_BABY };

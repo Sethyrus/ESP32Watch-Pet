@@ -70,7 +70,7 @@ $(SIM_OBJ): uisim.c lv_conf.h
 	$(CC) $(UI_CFLAGS) $(SDL_CFLAGS) -DUISIM_DIR='"$(CURDIR)"' -c $< -o $@
 
 # Maquetas de estética (mock/mock.c): LVGL real + pet_render + tipografías candidatas.
-MOCK_SRC := mock/mock.c $(wildcard mock/fonts/*.c) $(wildcard $(ROOT)/components/pet_app/fonts/*.c) \
+MOCK_SRC := mock/mock.c $(wildcard mock/fonts/*.c) \
             $(wildcard $(ROOT)/components/pet_render/*.c) $(PNG_SRC)
 $(BUILD)/mock: $(MOCK_SRC) $(BUILD)/liblvgl.a
 	$(CC) -std=gnu17 -O1 -w -DLV_CONF_INCLUDE_SIMPLE $(INC) -I$(ROOT)/components/pet_app $(MOCK_SRC) $(BUILD)/liblvgl.a -lm -o $@

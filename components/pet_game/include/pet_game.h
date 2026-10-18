@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "pet_core.h"
+#include "pet_scene.h"
 
 #define PET_GAME_W 400
 #define PET_GAME_H 280
@@ -39,10 +40,16 @@ typedef struct {
     uint32_t phase_t;
     int8_t   lit;
     uint32_t lit_until;
-    /* pesas */
-    int      fill;                     /* 0..1000 */
-    uint8_t  weight;
+    /* pesas: una flecha va y viene por el medidor; hay que tocar con ella en la zona */
+    int      fill;                     /* posicion de la flecha 0..1000 */
+    int8_t   dir;
+    int16_t  zone, zone_w;             /* centro y media anchura de la zona buena */
+    uint8_t  weight, lives, perfects;
+    bool     last_perfect;
     uint32_t lift_t;
+    /* comun */
+    uint8_t  level;                    /* nivel de la criatura (lo pone la UI tras start): sube la dificultad */
+    pet_parts_t parts;                 /* chispas y estrellas del juego */
     /* sucesos para sonidos y efectos (pet_game_take_events) */
     uint16_t events;
     int8_t   ev_pad;                   /* tecla de Memoria que acaba de encenderse */
@@ -51,7 +58,8 @@ typedef struct {
 
 enum {
     GEV_CATCH = 1 << 0, GEV_STAR = 1 << 1, GEV_ZAP = 1 << 2, GEV_PAD = 1 << 3, GEV_GOOD = 1 << 4,
-    GEV_FAIL = 1 << 5, GEV_TICK = 1 << 6, GEV_LIFTED = 1 << 7, GEV_DROP = 1 << 8, GEV_WIN = 1 << 9
+    GEV_FAIL = 1 << 5, GEV_TICK = 1 << 6, GEV_LIFTED = 1 << 7, GEV_DROP = 1 << 8, GEV_WIN = 1 << 9,
+    GEV_PERFECT = 1 << 10
 };
 
 void pet_game_start(pet_game_t *g, pet_game_id_t id, uint32_t seed, const pet_view_t *pet);

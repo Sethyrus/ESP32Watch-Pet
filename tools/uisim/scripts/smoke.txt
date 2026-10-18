@@ -1,6 +1,6 @@
 # Recorrido de la interfaz v2: huevo, nacimiento, necesidades, cada panel y los tres juegos.
-# Bandeja (centros): Comer 49, Jugar 127, Asear 205, Dormir 283, Mas 361; y = 422.
-# Escena en (5,106): caca 0 en (41,356), caca 1 en (369,356).
+# Bandeja (centros): Comer 61, Jugar 133, Asear 205, Dormir 277, Más 349; y = 444 (vale 416-472).
+# Escena en (5,136); se toca la caca 0 en (41,356).
 # expect_sound comprueba que la acción anterior ha sonado.
 shot 00-egg
 run 130
@@ -93,7 +93,7 @@ pwr
 wait 200
 tap 205 295
 wait 300
-tap 322 236
+tap 325 256
 expect_sound coin
 wait 300
 shot 18-settings
@@ -113,6 +113,19 @@ wait 600
 shot 20-adult-crown
 wake
 expect_sound v_hello
+# actividad por su cuenta: sin necesidades ni deseos, hace lo que más entrena (Fuerza: pesas)
+set stage 2
+set acc_worn 0
+set satiety 90
+set fun 90
+set hygiene 90
+set energy 90
+set poops 0
+set wish_kind 0
+set next_wish_s 1900000000
+set train[2] 80
+wait 21000   # la actividad toca a los ~19 s (simulación determinista)
+shot 22-activity
 clock 23:30
 wait 600
-shot 21-night
+shot 23-night

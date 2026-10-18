@@ -68,18 +68,26 @@ static void stars(pet_gfx_t *g, uint32_t t_ms)
     }
 }
 
+/* Bocadillo de RPG: caja blanca con borde oscuro y un rabito escalonado hacia la cabeza. */
 static void bubble(pet_gfx_t *g, const pet_scene_t *sc)
 {
     int bx, by, bw, bh;
     pet_scene_bubble_rect(sc, &bx, &by, &bw, &bh);
-    by += (int)((sc->t_ms / 400) % 2) * 2;                 /* flota */
-    const uint16_t edge = pet_rgb565(sc->bubble_wish ? 0xffcd75 : 0xef7d57), fill = pet_rgb565(0x10162a);
-    pet_gfx_rrect(g, bx, by, bw, bh, 18, edge);
-    pet_gfx_rrect(g, bx + 4, by + 4, bw - 8, bh - 8, 14, fill);
-    /* rabito hacia la cabeza */
-    const int left = bx > sc->x + PET_W * PET_SCENE_SCALE / 2;
-    const int tx = left ? bx + 6 : bx + bw - 18;
-    for (int k = 0; k < 3; k++) pet_gfx_fill(g, tx + (left ? -k * 6 : k * 6), by + bh + k * 6, 10 - k * 2, 6, edge);
+    by += (int)((sc->t_ms / 400) % 2) * 3;                 /* flota */
+    const uint16_t ink = pet_rgb565(0x1a1c2c);
+    const uint16_t paper = pet_rgb565(sc->bubble_wish ? 0xfff4c2 : 0xf4f4f4);
+    const uint16_t edge = sc->bubble_wish ? pet_rgb565(0xffcd75) : ink;
+    pet_gfx_fill(g, bx, by, bw, bh, ink);
+    if (sc->bubble_wish) pet_gfx_fill(g, bx + 3, by + 3, bw - 6, bh - 6, edge);
+    pet_gfx_fill(g, bx + (sc->bubble_wish ? 6 : 4), by + (sc->bubble_wish ? 6 : 4), bw - (sc->bubble_wish ? 12 : 8),
+                 bh - (sc->bubble_wish ? 12 : 8), paper);
+    const int left = bx > sc->x + PET_W * PET_SCENE_SCALE / 2;   /* la cabeza queda a la izquierda */
+    const int tx = left ? bx + 10 : bx + bw - 20;
+    for (int k = 0; k < 3; k++) {
+        const int x = tx + (left ? -k * 5 : k * 5);
+        pet_gfx_fill(g, x, by + bh + k * 5, 10 - k * 2, 5, ink);
+        if (k < 2) pet_gfx_fill(g, x + 2, by + bh + k * 5 - (k ? 0 : 4), 6 - k * 2, 4, paper);
+    }
     pet_gfx_icon(g, (pet_icon_t)sc->bubble, bx + (bw - PET_ICON * 4) / 2, by + (bh - PET_ICON * 4) / 2, 4);
 }
 
@@ -324,6 +332,33 @@ void pet_scene_head(const pet_scene_t *sc, int *x, int *y)
     *y = HEAD_Y[sc->view.stage < PET_STAGE_COUNT ? sc->view.stage : 1] - sc->hop;
 }
 
+/* Objeto de la actividad: la pelota bota al lado, la pesa sube y baja sobre la cabeza, el libro
+ * se sostiene delante (y pasa página). */
+static void prop(pet_gfx_t *g, const pet_scene_t *sc)
+{
+    int hx, hy;
+    pet_scene_head(sc, &hx, &hy);
+    const uint32_t t = sc->act_ms;
+    switch (sc->act) {
+    case ACT_BALL: {
+        const int ph = (int)(t % 700);                       /* parábola de 0,7 s */
+        const int up = ph * (700 - ph) / 1300;               /* 0..94 px */
+        const int bx = hx + (hx < PET_SCENE_W / 2 ? 80 : -80) - PET_ICON * 2;
+        pet_gfx_icon(g, ICON_BALL, bx, PET_SCENE_FLOOR - PET_ICON * 4 - up, 4);
+        break;
+    }
+    case ACT_LIFT: {
+        const int lift = (t / 500) % 2 ? 0 : 22;
+        pet_gfx_icon(g, ICON_DUMBBELL, hx - PET_ICON * 2, hy - 80 - lift, 4);
+        break;
+    }
+    case ACT_READ:
+        pet_gfx_icon(g, ICON_BOOK, hx - PET_ICON * 2, hy + 34 + (int)((t / 900) % 2) * 2, 4);
+        break;
+    default: break;
+    }
+}
+
 static void dim(uint16_t *px, size_t n)
 {
     for (size_t i = 0; i < n; i++) {
@@ -335,12 +370,16 @@ static void dim(uint16_t *px, size_t n)
 void pet_scene_draw(const pet_scene_t *sc, uint16_t *dst)
 {
     pet_gfx_t g = { dst, PET_SCENE_W, PET_SCENE_H };
-    memset(dst, 0, (size_t)PET_SCENE_W * PET_SCENE_H * 2);
-    if (sc->night) stars(&g, sc->t_ms);
-    /* suelo: una linea y unas briznas que no se queman (se desplazan con la escena) */
-    const uint16_t floor_c = pet_rgb565(0x1e293b), tuft = pet_rgb565(0x253247);
-    pet_gfx_fill(&g, 0, PET_SCENE_FLOOR, PET_SCENE_W, 3, floor_c);
-    for (int i = 0; i < 9; i++) pet_gfx_fill(&g, 20 + i * 44 + (i % 2) * 9, PET_SCENE_FLOOR + 7 + (i % 3) * 3, 14, 2, tuft);
+    if (sc->bg) {
+        memcpy(dst, sc->bg, (size_t)PET_SCENE_W * PET_SCENE_H * 2);
+    } else {
+        memset(dst, 0, (size_t)PET_SCENE_W * PET_SCENE_H * 2);
+        if (sc->night) stars(&g, sc->t_ms);
+        /* suelo: una linea y unas briznas que no se queman (se desplazan con la escena) */
+        const uint16_t floor_c = pet_rgb565(0x1e293b), tuft = pet_rgb565(0x253247);
+        pet_gfx_fill(&g, 0, PET_SCENE_FLOOR, PET_SCENE_W, 3, floor_c);
+        for (int i = 0; i < 9; i++) pet_gfx_fill(&g, 20 + i * 44 + (i % 2) * 9, PET_SCENE_FLOOR + 7 + (i % 3) * 3, 14, 2, tuft);
+    }
 
     for (int i = 0; i < sc->poops && i < 4; i++) {
         int x, y, w, h;
@@ -351,6 +390,7 @@ void pet_scene_draw(const pet_scene_t *sc, uint16_t *dst)
     }
     const int top = PET_SCENE_FLOOR + 2 - PET_H * PET_SCENE_SCALE - sc->hop;
     pet_gfx_creature(&g, &sc->view, sc->x, top, PET_SCENE_SCALE);
+    if (sc->act) prop(&g, sc);
     if (sc->dark) dim(dst, (size_t)PET_SCENE_W * PET_SCENE_H);
     if (sc->bubble >= 0) bubble(&g, sc);
     if (sc->parts) pet_parts_draw(sc->parts, &g);

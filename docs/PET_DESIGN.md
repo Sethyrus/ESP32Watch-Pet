@@ -83,9 +83,11 @@ Duran de 20 a 40 s, se juegan con el dedo y la criatura es la protagonista. Cues
 
 | Juego | Atributo | Desde | Mecánica |
 | --- | --- | --- | --- |
-| **Atrapa** | Agilidad | nivel 1 | 30 s. La criatura sigue al dedo por abajo; caen comida (+1), estrellas (+3) y rayos (−2 y aturde 0,6 s). La velocidad sube con el tiempo. |
-| **Memoria** | Ingenio | nivel 1 | Cuatro botones de colores. La criatura enseña una secuencia que crece desde 3 y hay que repetirla. Termina al fallar o al llegar a 10. |
-| **Pesas** | Fuerza | nivel 2 | Tocar rápido para levantar la pesa antes de que se caiga; 5 pesas cada vez más pesadas, 6 s cada una. |
+| **Atrapa** | Agilidad | nivel 1 | 30 s en un prado; el cielo pasa a atardecer según se acaba el tiempo. La criatura sigue al dedo por abajo; caen comida (+1), estrellas (+3) y rayos (−2 y aturde 0,7 s). Con una racha de 5 o más, la comida vale doble (×2). La velocidad sube con el tiempo. |
+| **Memoria** | Ingenio | nivel 1 | En un escenario con telón, cuatro teclas de colores con su nota. La criatura baila la secuencia (salta y mira hacia cada tecla), que crece desde 3, y hay que repetirla. Cada ronda va más deprisa. Termina al fallar o tras 6 rondas. |
+| **Pesas** | Fuerza | nivel 2 | Precisión, en un gimnasio. Una flecha va y viene por un medidor; hay que tocar cuando está en la zona verde (en el centro claro, «¡Perfecto!»). Son 5 pesas: cada una estrecha la zona y acelera la flecha. Hay 3 vidas; fallar o tardar más de 8 s cuesta una. |
+
+**Dificultad por nivel (R27):** a más nivel de la criatura, más rayos y caída más rápida en Atrapa, secuencias más rápidas en Memoria y zona más estrecha y flecha más rápida en Pesas (hasta el nivel 10). El bot perfecto sigue sacando ≥ 90 en el nivel 10.
 
 Al terminar, una tarjeta con la puntuación, el récord y lo ganado, y los botones «Otra vez» y «Salir».
 
@@ -160,27 +162,31 @@ El WiFi pasa de ser la comida a ser **exploración opcional**. Mientras la app e
 - **Siesta:** la criatura duerme 30 min, la energía sube +40 y se puede despertar tocándola.
 - **Cabeza o barriga:** tocar la cabeza le da una caricia (corazones); tocar la barriga, cosquillas (se ríe).
 - **Saludo:** al encender la pantalla, si está despierta, salta y saluda.
+- **Actividades por su cuenta (R28):** cada medio minuto más o menos, si no necesita nada, hace lo que más entrena: el de Atrapa juega con una pelota, el de Pesas levanta una pesa, el de Memoria lee un libro y el que apenas juega dormita. Así el entrenamiento se ve en la escena antes de la evolución.
+- **Te mira:** mientras el dedo toca la escena, la criatura gira la vista hacia él.
 - **Partículas con azar (R23):** cada ráfaga sale distinta (posición, velocidad, tamaño, vida). Corazones, pompas que suben y explotan, monedas que giran y rebotan, chispas, migas al comer, polvo al pisar, Z al dormir, estrellas al subir de nivel y mareo.
 
 ## 9b. Sonido (R22)
 
-Efectos de 8 bits generados por código, con la **voz de la criatura**: gorjeos que dependen de la especie (la cría es aguda; el Forzudo, grave; el Sabio, suave) y varían un poco cada vez. Suena al saludar, al pedir algo, con caricias, cosquillas, mareo, sueño o malito. También en las acciones (comer, cacas, baño, monedas, compra, medicina, nivel, evolución, deseo cumplido) y en los juegos: en Atrapa el tono sube con la racha, en Memoria cada tecla tiene su nota y en Pesas el tono sube con la barra. Volumen en Ajustes: No, Bajo, Medio o Alto (por defecto Medio). En silencio de noche y mientras duerme; los menús no suenan.
+Efectos de 8 bits generados por código, con la **voz de la criatura**: gorjeos que dependen de la especie (la cría es aguda; el Forzudo, grave; el Sabio, suave) y varían un poco cada vez. Suena al saludar, al pedir algo, con caricias, cosquillas, mareo, sueño o malito. También en las acciones (comer, cacas, baño, monedas, compra, medicina, nivel, evolución, deseo cumplido) y en los juegos: en Atrapa el tono sube con la racha, en Memoria cada tecla tiene su nota y en Pesas suena un tono según dónde esté la flecha, con fanfarria en los «¡Perfecto!». Volumen en Ajustes: No, Bajo, Medio o Alto (por defecto Medio). En silencio de noche y mientras duerme; los menús no suenan.
 
 ## 10. Interfaz
 
+Estética «juguete de bolsillo» (R26): todo en pixel art y letra pixel. La pantalla es la habitación de la mascota: papel pintado, un cuadro, una planta, una alfombra y una ventana que enseña la hora del día (día, atardecer o noche; de noche la luz se apaga).
+
 ```text
 ┌──────────────────────────────┐
-│            HH:MM             │  hora
-│  ⚡80%      Nv 3      ● 125   │  batería, nivel, monedas
-│  🍖▓▓▓  🎾▓▓░  🫧▓▓▓  🌙▓░░   │  4 necesidades
-│                              │
-│   ESCENA 400×280 (criatura   │
-│   paseando, cacas, burbuja)  │
-│                              │
-│ [Comer][Jugar][Asear][Dormir][Más] │  bandeja con iconos
-│        ▓▓▓▓▓▓░░░ XP          │  barra de experiencia
+│ 80%        HH:MM             │  batería y hora (con sombra dura)
+│  Nv 3 ▪▪▪▪▫▫        ● 125     │  nivel, XP en 6 segmentos, monedas
+│  🍖▮▮▮▯▯ 🎾▮▮▯▯▯ 🫧▮▮▮▮▯ ⚡▮▮▮▯▯ │  4 necesidades en pips (rojos si < 25)
+│   [cuadro]      [ventana]    │
+│   ESCENA 400×280: criatura en │
+│   su alfombra, cacas, bocadillo│
+│ [🍖][🎾][🫧][🌙][···]          │  bandeja de botones de madera, solo iconos
 └──────────────────────────────┘
 ```
+
+- **Menús:** ventana de RPG (fondo azul marino, borde blanco y contorno oscuro) sobre la habitación atenuada; botones de madera; los avisos salen en ventanitas del mismo estilo.
 
 - **Más:** Estado (necesidades con números, edad, atributos, pistas de evolución), Tienda, Armario, Álbum y Ajustes (noche, sonido, velocidad del tiempo de prueba, reiniciar).
 - **Gestos:** deslizar hacia arriba abre Comer y hacia abajo, Estado.
