@@ -812,9 +812,27 @@ static void refresh_status(const pet_state_t *s, int64_t now)
 // ---------- Armario (shop + wardrobe) ----------
 
 // The pet wearing `acc`, cropped to its head, on the button colour.
-static void render_preview(int acc)
+// Drawing a creature needs ~5.5 KB of stack (more than the LVGL task has), so the panels only
+// allocate and clear their pictures; ui_task draws them (panel_fill) holding the LVGL lock.
+static volatile int s_fill_req;   // panel_t to fill, or 0
+
+static void prepare_preview(int acc)
 {
     s_preview[acc] = heap_caps_malloc(PREVIEW_W * PREVIEW_H * 2, MALLOC_CAP_SPIRAM);
+    if (!s_preview[acc]) {
+        return;
+    }
+    const uint16_t bg = pet_rgb565(BOX_BG);
+    for (int i = 0; i < PREVIEW_W * PREVIEW_H; i++) {
+        s_preview[acc][i] = bg;
+    }
+    s_preview_dsc[acc] = (lv_image_dsc_t){.header = {.magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RGB565,
+                                                     .w = PREVIEW_W, .h = PREVIEW_H, .stride = PREVIEW_W * 2},
+                                          .data_size = PREVIEW_W * PREVIEW_H * 2, .data = (const uint8_t *)s_preview[acc]};
+}
+
+static void fill_preview(int acc)
+{
     uint16_t *full = heap_caps_malloc(96 * 96 * 2, MALLOC_CAP_SPIRAM);
     if (!s_preview[acc] || !full) {
         free(full);
@@ -850,9 +868,6 @@ static void render_preview(int acc)
     top = top > 2 ? top - 2 : 0;
     memcpy(s_preview[acc], full + top * 96, PREVIEW_W * PREVIEW_H * 2);
     free(full);
-    s_preview_dsc[acc] = (lv_image_dsc_t){.header = {.magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RGB565,
-                                                     .w = PREVIEW_W, .h = PREVIEW_H, .stride = PREVIEW_W * 2},
-                                          .data_size = PREVIEW_W * PREVIEW_H * 2, .data = (const uint8_t *)s_preview[acc]};
 }
 
 static void on_acc(lv_event_t *e)
@@ -893,10 +908,11 @@ static void open_shop(void)
     lv_obj_set_scroll_dir(list, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
     for (int a = ACC_NONE + 1; a < ACC_COUNT; a++) {
-        render_preview(a);
+        prepare_preview(a);
         list_row(list, a, (a - 1) * 74, 68, s_preview[a] ? &s_preview_dsc[a] : NULL, on_acc);
         lv_obj_remove_flag(s_rows[a], LV_OBJ_FLAG_GESTURE_BUBBLE);
     }
+    s_fill_req = P_SHOP;
 }
 
 static void refresh_shop(const pet_state_t *s)
@@ -942,41 +958,13 @@ static void open_album(void)
         for (int i = 0; i < ALBUM_W * ALBUM_H; i++) {
             s_album_px[i] = bg;
         }
-        pet_lock();
-        const uint16_t album = g_pet.album;
-        const uint32_t seed = g_pet.view_seed;
-        pet_unlock();
-        const uint16_t sil = pet_rgb565(0x1e293b);
-        uint16_t tmp[96 * 96];
-        for (int b = 0; b < 4; b++) {
-            for (int v = 0; v < 4; v++) {
-                const bool have = album >> (b * 4 + v) & 1;
-                pet_view_t pv = {.seed = seed, .stage = PET_ADULT, .shape = (uint8_t)b, .variant = (uint8_t)v,
-                                 .expr = EXPR_HAPPY};
-                memset(tmp, 0, sizeof(tmp));
-                pet_gfx_t t = {tmp, 96, 96};
-                pet_gfx_creature(&t, &pv, 0, 0, 2);
-                const int cx = v * 84 - 6, cy = b * 72 - 14;
-                for (int y = 8; y < 96; y++) {
-                    const int yy = cy + y;
-                    if (yy < 0 || yy >= ALBUM_H) {
-                        continue;
-                    }
-                    for (int x = 0; x < 96; x++) {
-                        const int xx = cx + x;
-                        if (xx >= 0 && xx < ALBUM_W && tmp[y * 96 + x]) {
-                            s_album_px[yy * ALBUM_W + xx] = have ? tmp[y * 96 + x] : sil;
-                        }
-                    }
-                }
-            }
-        }
         s_album_dsc = (lv_image_dsc_t){.header = {.magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RGB565,
                                                   .w = ALBUM_W, .h = ALBUM_H, .stride = ALBUM_W * 2},
                                        .data_size = ALBUM_W * ALBUM_H * 2, .data = (const uint8_t *)s_album_px};
         lv_obj_t *im = lv_image_create(s_panel);
         lv_image_set_src(im, &s_album_dsc);
         lv_obj_align(im, LV_ALIGN_TOP_MID, 0, BOX_Y + 40);
+        s_fill_req = P_ALBUM;
     }
     s_info = make_label(s_panel, &pet_font_s, 0xc5dbe6);
     lv_obj_set_width(s_info, 330);
@@ -996,6 +984,70 @@ static void refresh_album(const pet_state_t *s)
     snprintf(b, sizeof(b), "Formas %d/16  Platos %d/4  Gen. %d\nRécords: %d / %d / %d", forms, foods, s->generation + 1,
              s->best[0], s->best[1], s->best[2]);
     lv_label_set_text(s_info, b);
+}
+
+static void fill_album(void)
+{
+    uint16_t *tmp = heap_caps_malloc(96 * 96 * 2, MALLOC_CAP_SPIRAM);
+    if (!s_album_px || !tmp) {
+        free(tmp);
+        return;
+    }
+    pet_lock();
+    const uint16_t album = g_pet.album;
+    const uint32_t seed = g_pet.view_seed;
+    pet_unlock();
+    const uint16_t sil = pet_rgb565(0x1e293b);
+    for (int b = 0; b < 4; b++) {
+        for (int v = 0; v < 4; v++) {
+            const bool have = album >> (b * 4 + v) & 1;
+            pet_view_t pv = {.seed = seed, .stage = PET_ADULT, .shape = (uint8_t)b, .variant = (uint8_t)v,
+                             .expr = EXPR_HAPPY};
+            memset(tmp, 0, 96 * 96 * 2);
+            pet_gfx_t t = {tmp, 96, 96};
+            pet_gfx_creature(&t, &pv, 0, 0, 2);
+            const int cx = v * 84 - 6, cy = b * 72 - 14;
+            for (int y = 8; y < 96; y++) {
+                const int yy = cy + y;
+                if (yy < 0 || yy >= ALBUM_H) {
+                    continue;
+                }
+                for (int x = 0; x < 96; x++) {
+                    const int xx = cx + x;
+                    if (xx >= 0 && xx < ALBUM_W && tmp[y * 96 + x]) {
+                        s_album_px[yy * ALBUM_W + xx] = have ? tmp[y * 96 + x] : sil;
+                    }
+                }
+            }
+        }
+    }
+    free(tmp);
+}
+
+// ui_task: draws the pictures of the panel that was just opened. Holds the LVGL lock for the
+// whole drawing, so the panel cannot be closed (and its buffers freed) under it.
+static void panel_fill(void)
+{
+    const int req = s_fill_req;
+    if (!req) {
+        return;
+    }
+    s_fill_req = 0;
+    if (!bsp_display_lock(1000)) {
+        s_fill_req = req;   // try again next tick
+        return;
+    }
+    if ((int)s_kind == req) {
+        if (req == P_SHOP) {
+            for (int a = ACC_NONE + 1; a < ACC_COUNT; a++) {
+                fill_preview(a);
+            }
+        } else if (req == P_ALBUM) {
+            fill_album();
+        }
+        lv_obj_invalidate(s_panel);
+    }
+    bsp_display_unlock();
 }
 
 // ---------- Ajustes ----------
@@ -1635,6 +1687,7 @@ void pet_ui_tick(void)
         have_last = false;
         return;
     }
+    panel_fill();
     const int64_t now = pet_now_s();
     const bool new_sec = now != last_sec;
     last_sec = now;
